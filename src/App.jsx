@@ -5,6 +5,7 @@ import { onAuthChange } from "./firebase.js";
 import AuthScreen from "./components/AuthScreen.jsx";
 import Nav from "./components/Nav.jsx";
 import RoleModelSetup from "./components/RoleModelSetup.jsx";
+import AdminPage from "./pages/AdminPage.jsx";
 import BioPage from "./pages/BioPage.jsx";
 import DigestPage from "./pages/DigestPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
@@ -16,6 +17,8 @@ export default function App() {
   const [roleModel, setRoleModel] = useState(null);
   const [loading, setLoading] = useState(true);
   const refreshAttemptRef = useRef(new Set());
+  const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || "dalmomendonca@gmail.com").toLowerCase();
+  const isAdmin = !!user?.email && user.email.toLowerCase() === adminEmail;
 
   const isLowQualityImage = (url = "") => {
     const lowerUrl = url.toLowerCase();
@@ -138,6 +141,7 @@ export default function App() {
           roleModel={roleModel}
           onLogout={handleLogout}
           onImageRefresh={handleImageRefresh}
+          isAdmin={isAdmin}
         />
         <main className="stage">
           <Routes>
@@ -161,6 +165,10 @@ export default function App() {
               }
             />
             <Route path="/social" element={<SocialPage />} />
+            <Route
+              path="/admin"
+              element={isAdmin ? <AdminPage /> : <Navigate to="/bio" replace />}
+            />
             <Route path="/" element={<Navigate to="/bio" replace />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

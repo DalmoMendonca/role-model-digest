@@ -847,6 +847,240 @@ input:focus {
   min-height: 240px;
 }
 
+.admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+}
+
+.metric-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+}
+
+.metric-label {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.metric-value {
+  margin: 0;
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  font-weight: 600;
+}
+
+.admin-users {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-user-card {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-user-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.admin-user-name {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.admin-user-meta {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.admin-section {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-section h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+}
+
+.admin-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px dashed rgba(17, 20, 24, 0.12);
+}
+
+.admin-row:last-child {
+  border-bottom: none;
+}
+
+.admin-row-title {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.admin-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-inline-details {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(17, 20, 24, 0.15);
+  background: rgba(17, 20, 24, 0.03);
+}
+
+.admin-inline-details summary {
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.admin-inline-details p {
+  margin: 8px 0 0;
+}
+
+.admin-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: rgba(17, 20, 24, 0.08);
+}
+
+.admin-pill.active {
+  background: rgba(31, 191, 154, 0.2);
+  color: #0c5c4b;
+}
+
+.admin-digest-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-digest {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 20, 24, 0.1);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.admin-digest summary {
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-summary-count {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.admin-item-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.admin-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(17, 20, 24, 0.08);
+}
+
+.admin-item-main {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-item-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.admin-item-date {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.admin-item a {
+  font-size: 0.85rem;
+}
+
+.admin-pill-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.admin-peer {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 20, 24, 0.08);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.admin-peer p {
+  margin: 0;
+}
+
+.admin-requests {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.admin-request-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed rgba(17, 20, 24, 0.12);
+}
+
+.admin-request-row:last-child {
+  border-bottom: none;
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -943,6 +1177,24 @@ input:focus {
 
   .digest-video {
     grid-template-columns: 1fr;
+  }
+
+  .admin-user-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-item {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-item-date {
+    white-space: normal;
+  }
+
+  .admin-digest summary {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

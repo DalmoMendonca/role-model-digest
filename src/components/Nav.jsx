@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 
-export default function Nav({ user, roleModel, onLogout, onImageRefresh }) {
+export default function Nav({ user, roleModel, onLogout, onImageRefresh, isAdmin }) {
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
@@ -50,6 +50,14 @@ export default function Nav({ user, roleModel, onLogout, onImageRefresh }) {
         >
           Social
         </NavLink>
+        {isAdmin ? (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
+            Admin
+          </NavLink>
+        ) : null}
       </nav>
       <div className="nav-footer">
         <p className="muted">{user.displayName}</p>

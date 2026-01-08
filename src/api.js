@@ -117,3 +117,7 @@ export function getTimeline(query) {
   const queryString = query ? `?q=${encodeURIComponent(query)}` : "";
   return apiRequest(`/api/social/timeline${queryString}`);
 }
+
+export function getAdminOverview() {
+  return apiRequest("/api/admin/overview");
+}

@@ -44,6 +44,13 @@ function toPublicUser(user) {
   };
 }
 
+function isAdminUser(user) {
+  const adminEmail =
+    (process.env.ADMIN_EMAIL || "dalmomendonca@gmail.com").toLowerCase();
+  const email = `${user?.email || ""}`.toLowerCase();
+  return email === adminEmail;
+}
+
 function mapRoleModel(doc) {
   const data = doc?.data ? doc.data() : doc;
   if (!data) return null;
@@ -93,6 +100,44 @@ async function ensureUserDoc(decoded) {
   }
   await attachPendingPeerRequests(decoded.uid, normalizedEmail);
   return { ...data, ...updates, id: decoded.uid };
+}
+
+async function ensureUserDocFromAuth(userRecord, normalizedEmail) {
+  if (!userRecord?.uid || !normalizedEmail) return null;
+  const userRef = db.collection("users").doc(userRecord.uid);
+  const snapshot = await userRef.get();
+  const fallbackName = normalizedEmail ? normalizedEmail.split("@")[0] : "User";
+  if (!snapshot.exists) {
+    const payload = {
+      id: userRecord.uid,
+      email: normalizedEmail,
+      displayName: userRecord.displayName || fallbackName,
+      weeklyEmailOptIn: true,
+      timezone: "America/Los_Angeles",
+      currentRoleModelId: null,
+      createdAt: new Date().toISOString()
+    };
+    await userRef.set(payload);
+    await attachPendingPeerRequests(userRecord.uid, normalizedEmail);
+    return payload;
+  }
+
+  const data = snapshot.data();
+  const updates = {};
+  if (!data.displayName && (userRecord.displayName || fallbackName)) {
+    updates.displayName = userRecord.displayName || fallbackName;
+  }
+  if (normalizedEmail && data.email !== normalizedEmail) {
+    updates.email = normalizedEmail;
+  }
+  if (typeof data.weeklyEmailOptIn !== "boolean") {
+    updates.weeklyEmailOptIn = true;
+  }
+  if (Object.keys(updates).length) {
+    await userRef.update(updates);
+  }
+  await attachPendingPeerRequests(userRecord.uid, normalizedEmail);
+  return { ...data, ...updates, id: userRecord.uid };
 }
 
 async function attachPendingPeerRequests(userId, normalizedEmail) {
@@ -378,6 +423,190 @@ app.patch("/api/preferences", requireAuth, async (req, res) => {
   res.json({ user: toPublicUser({ ...updated.data(), id: updated.id }) });
 });
 
+app.get("/api/admin/overview", requireAuth, async (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const [
+    userSnap,
+    roleModelSnap,
+    digestSnap,
+    peerSnap,
+    requestSnap
+  ] = await Promise.all([
+    db.collection("users").get(),
+    db.collection("roleModels").get(),
+    db.collection("digests").get(),
+    db.collection("peers").get(),
+    db.collection("peerRequests").get()
+  ]);
+
+  const users = userSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const userMap = new Map(users.map((user) => [user.id, user]));
+
+  const roleModels = roleModelSnap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+  const rolesByUserId = new Map();
+  roleModels.forEach((role) => {
+    if (!role?.userId) return;
+    if (!rolesByUserId.has(role.userId)) {
+      rolesByUserId.set(role.userId, []);
+    }
+    rolesByUserId.get(role.userId).push({
+      id: role.id,
+      name: role.name || "",
+      bioText: role.bioText || "",
+      notesText: role.notesText || "",
+      imageUrl: role.imageUrl || "",
+      isActive: !!role.isActive,
+      createdAt: role.createdAt || "",
+      bioUpdatedAt: role.bioUpdatedAt || "",
+      notesUpdatedAt: role.notesUpdatedAt || "",
+      imageUpdatedAt: role.imageUpdatedAt || ""
+    });
+  });
+
+  const digests = digestSnap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+  const digestsByRoleModelId = new Map();
+  digests.forEach((digest) => {
+    if (!digest?.roleModelId) return;
+    if (!digestsByRoleModelId.has(digest.roleModelId)) {
+      digestsByRoleModelId.set(digest.roleModelId, []);
+    }
+    const items = Array.isArray(digest.items) ? digest.items : [];
+    digestsByRoleModelId.get(digest.roleModelId).push({
+      id: digest.id,
+      weekStart: digest.weekStart || "",
+      summaryText: digest.summaryText || "",
+      generatedAt: digest.generatedAt || "",
+      items: items.map((item) => ({
+        sourceTitle: item.sourceTitle || "",
+        sourceUrl: item.sourceUrl || "",
+        sourceType: item.sourceType || "",
+        sourceDate: item.sourceDate || "",
+        summary: item.summary || ""
+      }))
+    });
+  });
+
+  const peers = peerSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const peersByUserId = new Map();
+  const connectionPairs = new Set();
+  peers.forEach((peer) => {
+    if (!peer?.userId || !peer?.peerId) return;
+    if (!peersByUserId.has(peer.userId)) {
+      peersByUserId.set(peer.userId, []);
+    }
+    peersByUserId.get(peer.userId).push(peer.peerId);
+    const pairKey = [peer.userId, peer.peerId].sort().join("|");
+    connectionPairs.add(pairKey);
+  });
+
+  const requests = requestSnap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+  const requestsByRequester = new Map();
+  const requestsByRecipient = new Map();
+  requests.forEach((request) => {
+    if (request.requesterId) {
+      if (!requestsByRequester.has(request.requesterId)) {
+        requestsByRequester.set(request.requesterId, []);
+      }
+      requestsByRequester.get(request.requesterId).push(request);
+    }
+    if (request.recipientId) {
+      if (!requestsByRecipient.has(request.recipientId)) {
+        requestsByRecipient.set(request.recipientId, []);
+      }
+      requestsByRecipient.get(request.recipientId).push(request);
+    }
+  });
+
+  const adminUsers = users.map((user) => {
+    const userRoles = rolesByUserId.get(user.id) || [];
+    const roleModelIds = userRoles.map((role) => role.id);
+    const roleModelsWithDigests = userRoles.map((role) => {
+      const roleDigests = (digestsByRoleModelId.get(role.id) || []).slice();
+      roleDigests.sort((a, b) =>
+        `${b.weekStart || ""}`.localeCompare(a.weekStart || "")
+      );
+      return {
+        ...role,
+        digests: roleDigests
+      };
+    });
+
+    const allDigests = roleModelIds.flatMap(
+      (roleId) => digestsByRoleModelId.get(roleId) || []
+    );
+    allDigests.sort((a, b) => `${b.weekStart || ""}`.localeCompare(a.weekStart || ""));
+
+    const peerIds = peersByUserId.get(user.id) || [];
+    const peerEntries = peerIds.map((peerId) => {
+      const peer = userMap.get(peerId);
+      return {
+        id: peerId,
+        displayName: peer?.displayName || "",
+        email: peer?.email || ""
+      };
+    });
+
+    const outgoing = (requestsByRequester.get(user.id) || []).map((req) => {
+      const recipient = req.recipientId ? userMap.get(req.recipientId) : null;
+      return {
+        id: req.id,
+        status: req.status || "pending",
+        createdAt: req.createdAt || "",
+        recipientName: recipient?.displayName || "",
+        recipientEmail: recipient?.email || req.recipientEmail || ""
+      };
+    });
+
+    const incoming = (requestsByRecipient.get(user.id) || []).map((req) => {
+      const requester = req.requesterId ? userMap.get(req.requesterId) : null;
+      return {
+        id: req.id,
+        status: req.status || "pending",
+        createdAt: req.createdAt || "",
+        requesterName: requester?.displayName || "",
+        requesterEmail: requester?.email || ""
+      };
+    });
+
+    return {
+      id: user.id,
+      email: user.email || "",
+      displayName: user.displayName || "",
+      weeklyEmailOptIn: !!user.weeklyEmailOptIn,
+      timezone: user.timezone || "",
+      createdAt: user.createdAt || "",
+      currentRoleModelId: user.currentRoleModelId || "",
+      roleModels: roleModelsWithDigests,
+      digests: allDigests,
+      peers: peerEntries,
+      outgoingRequests: outgoing,
+      incomingRequests: incoming
+    };
+  });
+
+  const summary = {
+    userCount: users.length,
+    roleModelCount: roleModels.length,
+    digestCount: digests.length,
+    peerConnectionCount: connectionPairs.size,
+    pendingRequestCount: requests.filter((req) => req.status === "pending").length
+  };
+
+  res.json({ summary, users: adminUsers });
+});
+
 app.get("/api/social/peers", requireAuth, async (req, res) => {
   const peerRows = await db
     .collection("peers")
@@ -453,13 +682,30 @@ app.post("/api/social/requests", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "Cannot add yourself" });
   }
 
+  let recipientId = null;
   const recipientSnap = await db
     .collection("users")
     .where("email", "==", normalizedEmail)
     .limit(1)
     .get();
 
-  if (recipientSnap.empty) {
+  if (!recipientSnap.empty) {
+    recipientId = recipientSnap.docs[0].id;
+  } else {
+    try {
+      const authUser = await admin.auth().getUserByEmail(normalizedEmail);
+      if (authUser?.uid) {
+        recipientId = authUser.uid;
+        await ensureUserDocFromAuth(authUser, normalizedEmail);
+      }
+    } catch (error) {
+      if (error?.code !== "auth/user-not-found") {
+        console.warn("Auth lookup failed", error);
+      }
+    }
+  }
+
+  if (!recipientId) {
     const existingInvite = await db
       .collection("peerRequests")
       .where("requesterId", "==", req.userId)
@@ -494,7 +740,6 @@ app.post("/api/social/requests", requireAuth, async (req, res) => {
     }
   }
 
-  const recipientId = recipientSnap.docs[0].id;
   if (recipientId === req.userId) {
     return res.status(400).json({ error: "Cannot add yourself" });
   }
@@ -618,13 +863,15 @@ app.get("/api/social/timeline", requireAuth, async (req, res) => {
       const digestSnap = await db
         .collection("digests")
         .where("roleModelId", "==", peer.currentRoleModelId)
-        .orderBy("weekStart", "desc")
-        .limit(1)
         .get();
       if (!digestSnap.empty) {
-        const digest = digestSnap.docs[0].data();
-        latestDigestSummary = digest.summaryText || "";
-        latestDigestWeek = digest.weekStart || "";
+        const digests = digestSnap.docs.map((doc) => doc.data());
+        digests.sort((a, b) =>
+          `${b.weekStart || ""}`.localeCompare(a.weekStart || "")
+        );
+        const latest = digests[0] || {};
+        latestDigestSummary = latest.summaryText || "";
+        latestDigestWeek = latest.weekStart || "";
       }
     }
 

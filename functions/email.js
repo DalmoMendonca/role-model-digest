@@ -53,12 +53,12 @@ export async function sendInviteEmail({ to, inviterName, roleModelName }) {
       <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#8c7b6b;margin-bottom:10px;">Role Model Digest</div>
       <h2 style="font-size:26px;margin:0 0 10px;">You're invited</h2>
       <p style="font-size:16px;line-height:1.7;color:#2e2b27;margin:0 0 14px;">
-        ${safeInviter} invited you to Role Model Digest - a weekly briefing that makes it effortless to follow a living role model.
+        ${safeInviter} invited you to Role Model Digest, a weekly briefing that makes it effortless to follow a living role model.
       </p>
       <div style="padding:14px 16px;border-radius:16px;background:#fff3e6;border:1px solid #f2d8c2;margin-bottom:18px;">
         <div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#6c5a4d;margin-bottom:6px;">Why they invited you</div>
         <div style="font-size:15px;line-height:1.6;color:#3d3a35;">
-          They're tracking <strong>${safeRoleModel}</strong> and want you to build your own focused, low-noise digest.
+          They're tracking <strong>${safeRoleModel}</strong> and want you to build your own focused summary.
         </div>
       </div>
       <ul style="padding-left:18px;margin:0 0 20px;color:#3d3a35;font-size:14px;line-height:1.7;">
