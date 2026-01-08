@@ -744,6 +744,227 @@ input:focus {
   background: rgba(255, 255, 255, 0.8);
 }
 
+.social-card {
+  display: grid;
+  gap: 18px;
+}
+
+.timeline-entry {
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(17, 20, 24, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  display: grid;
+  gap: 14px;
+}
+
+.timeline-entry-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.timeline-avatars {
+  position: relative;
+  width: 64px;
+  height: 54px;
+}
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px rgba(17, 20, 24, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  color: #584f46;
+  background: rgba(17, 20, 24, 0.08);
+}
+
+.role-avatar {
+  position: absolute;
+  bottom: -4px;
+  right: -6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.timeline-entry-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.timeline-date {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.timeline-summary {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.peer-name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.timeline-details {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reaction-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reaction-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 20, 24, 0.12);
+  background: rgba(17, 20, 24, 0.05);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.reaction-button.active {
+  background: rgba(31, 191, 154, 0.2);
+  border-color: rgba(31, 191, 154, 0.4);
+}
+
+.reaction-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.reaction-count {
+  font-weight: 600;
+}
+
+.comments {
+  display: grid;
+  gap: 12px;
+}
+
+.comments h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.comment-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.comment-thread {
+  display: grid;
+  gap: 12px;
+}
+
+.comment {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 20, 24, 0.1);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.comment-avatar {
+  width: 32px;
+  height: 32px;
+}
+
+.comment-author {
+  margin: 0;
+  font-weight: 600;
+}
+
+.comment-time {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.comment-text {
+  margin: 8px 0 0;
+}
+
+.comment-reply {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+.comment-replies {
+  margin-top: 10px;
+  padding-left: 18px;
+  border-left: 2px solid rgba(17, 20, 24, 0.08);
+  display: grid;
+  gap: 10px;
+}
+
+.discover-list {
+  display: grid;
+  gap: 12px;
+}
+
+.discover-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 20, 24, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.discover-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.discover-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.peer-chip-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
 .timeline-header {
   display: flex;
   justify-content: space-between;
@@ -1195,6 +1416,28 @@ input:focus {
   .admin-digest summary {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .timeline-entry-header {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .timeline-date {
+    text-align: left;
+  }
+
+  .comment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .discover-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .discover-actions {
+    justify-content: flex-start;
   }
 }
 

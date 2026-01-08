@@ -118,6 +118,29 @@ export function getTimeline(query) {
   return apiRequest(`/api/social/timeline${queryString}`);
 }
 
+export function getSocialUsers(query) {
+  const queryString = query ? `?q=${encodeURIComponent(query)}` : "";
+  return apiRequest(`/api/social/users${queryString}`);
+}
+
 export function getAdminOverview() {
   return apiRequest("/api/admin/overview");
+}
+
+export function addDigestReaction(digestId, type) {
+  return apiRequest(`/api/social/digests/${digestId}/reactions`, {
+    method: "POST",
+    body: JSON.stringify({ type })
+  });
+}
+
+export function addDigestComment(digestId, payload) {
+  return apiRequest(`/api/social/digests/${digestId}/comments`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getDigestThread(digestId) {
+  return apiRequest(`/api/social/digests/${digestId}/thread`);
 }

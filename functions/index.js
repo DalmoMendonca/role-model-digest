@@ -38,6 +38,7 @@ function toPublicUser(user) {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    photoURL: user.photoURL || "",
     weeklyEmailOptIn: !!user.weeklyEmailOptIn,
     timezone: user.timezone,
     currentRoleModelId: user.currentRoleModelId || null
@@ -70,11 +71,13 @@ async function ensureUserDoc(decoded) {
   const snapshot = await userRef.get();
   const normalizedEmail = decoded.email ? decoded.email.toLowerCase() : "";
   const fallbackName = normalizedEmail ? normalizedEmail.split("@")[0] : "User";
+  const photoURL = decoded.picture || decoded.photoURL || "";
   if (!snapshot.exists) {
     const payload = {
       id: decoded.uid,
       email: normalizedEmail,
       displayName: decoded.name || fallbackName,
+      photoURL,
       weeklyEmailOptIn: true,
       timezone: "America/Los_Angeles",
       currentRoleModelId: null,
@@ -92,6 +95,9 @@ async function ensureUserDoc(decoded) {
   if (normalizedEmail && data.email !== normalizedEmail) {
     updates.email = normalizedEmail;
   }
+  if (photoURL && data.photoURL !== photoURL) {
+    updates.photoURL = photoURL;
+  }
   if (typeof data.weeklyEmailOptIn !== "boolean") {
     updates.weeklyEmailOptIn = true;
   }
@@ -107,11 +113,13 @@ async function ensureUserDocFromAuth(userRecord, normalizedEmail) {
   const userRef = db.collection("users").doc(userRecord.uid);
   const snapshot = await userRef.get();
   const fallbackName = normalizedEmail ? normalizedEmail.split("@")[0] : "User";
+  const photoURL = userRecord.photoURL || "";
   if (!snapshot.exists) {
     const payload = {
       id: userRecord.uid,
       email: normalizedEmail,
       displayName: userRecord.displayName || fallbackName,
+      photoURL,
       weeklyEmailOptIn: true,
       timezone: "America/Los_Angeles",
       currentRoleModelId: null,
@@ -129,6 +137,9 @@ async function ensureUserDocFromAuth(userRecord, normalizedEmail) {
   }
   if (normalizedEmail && data.email !== normalizedEmail) {
     updates.email = normalizedEmail;
+  }
+  if (photoURL && data.photoURL !== photoURL) {
+    updates.photoURL = photoURL;
   }
   if (typeof data.weeklyEmailOptIn !== "boolean") {
     updates.weeklyEmailOptIn = true;
@@ -156,6 +167,88 @@ async function attachPendingPeerRequests(userId, normalizedEmail) {
     batch.update(doc.ref, { recipientId: userId, updatedAt: now });
   });
   await batch.commit();
+}
+
+const reactionTypes = ["like", "love", "clap", "insightful"];
+
+function normalizeReactionType(type) {
+  const normalized = `${type || ""}`.toLowerCase().trim();
+  return reactionTypes.includes(normalized) ? normalized : null;
+}
+
+async function getReactionSummary(digestId, viewerId) {
+  const reactionSnap = await db
+    .collection("digestReactions")
+    .where("digestId", "==", digestId)
+    .get();
+
+  const counts = {};
+  let viewerReaction = null;
+  reactionSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    if (!data?.type) return;
+    counts[data.type] = (counts[data.type] || 0) + 1;
+    if (data.userId === viewerId) {
+      viewerReaction = data.type;
+    }
+  });
+
+  return { counts, viewerReaction };
+}
+
+async function getDigestCommentsThread(digestId) {
+  const commentSnap = await db
+    .collection("digestComments")
+    .where("digestId", "==", digestId)
+    .get();
+
+  if (commentSnap.empty) {
+    return [];
+  }
+
+  const comments = commentSnap.docs
+    .map((doc) => ({
+      id: doc.id,
+      ...doc.data()
+    }))
+    .sort((a, b) =>
+      `${a.createdAt || ""}`.localeCompare(b.createdAt || "")
+    );
+  const userIds = [
+    ...new Set(comments.map((comment) => comment.userId).filter(Boolean))
+  ];
+  const userDocs = await Promise.all(
+    userIds.map((userId) => db.collection("users").doc(userId).get())
+  );
+  const userMap = new Map(
+    userDocs.map((doc) => [doc.id, doc.data() || {}])
+  );
+
+  const nodes = comments.map((comment) => ({
+    id: comment.id,
+    text: comment.text || "",
+    createdAt: comment.createdAt || "",
+    parentId: comment.parentId || null,
+    user: {
+      id: comment.userId || "",
+      displayName: userMap.get(comment.userId)?.displayName || "",
+      photoURL: userMap.get(comment.userId)?.photoURL || ""
+    },
+    replies: []
+  }));
+
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const roots = [];
+
+  nodes.forEach((node) => {
+    if (node.parentId && nodeMap.has(node.parentId)) {
+      nodeMap.get(node.parentId).replies.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  return roots;
 }
 
 async function requireAuth(req, res, next) {
@@ -619,14 +712,21 @@ app.get("/api/social/peers", requireAuth, async (req, res) => {
     const peerUserDoc = await db.collection("users").doc(peerId).get();
     const peerUser = peerUserDoc.data();
     let roleModelName = "";
+    let roleModelImageUrl = "";
+    let roleModelId = "";
     if (peerUser?.currentRoleModelId) {
       const roleDoc = await db.collection("roleModels").doc(peerUser.currentRoleModelId).get();
       roleModelName = roleDoc.data()?.name || "";
+      roleModelImageUrl = roleDoc.data()?.imageUrl || "";
+      roleModelId = roleDoc.id;
     }
     peers.push({
       id: peerId,
       displayName: peerUser?.displayName || "",
-      roleModelName
+      photoURL: peerUser?.photoURL || "",
+      roleModelName,
+      roleModelImageUrl,
+      roleModelId
     });
   }
 
@@ -671,36 +771,145 @@ app.get("/api/social/peers", requireAuth, async (req, res) => {
   res.json({ peers, incomingRequests, outgoingRequests });
 });
 
+app.get("/api/social/users", requireAuth, async (req, res) => {
+  const query = (req.query.q || "").toString().toLowerCase().trim();
+  const [
+    userSnap,
+    roleModelSnap,
+    peerSnap,
+    outgoingSnap,
+    incomingSnap
+  ] = await Promise.all([
+    db.collection("users").get(),
+    db.collection("roleModels").where("isActive", "==", true).get(),
+    db.collection("peers").where("userId", "==", req.userId).get(),
+    db.collection("peerRequests").where("requesterId", "==", req.userId).get(),
+    db.collection("peerRequests").where("recipientId", "==", req.userId).get()
+  ]);
+
+  const roleByUserId = new Map();
+  roleModelSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    if (!data?.userId) return;
+    roleByUserId.set(data.userId, {
+      id: doc.id,
+      name: data.name || "",
+      imageUrl: data.imageUrl || ""
+    });
+  });
+
+  const peerIds = new Set(peerSnap.docs.map((doc) => doc.data().peerId));
+  const outgoingIds = new Set();
+  const outgoingEmails = new Set();
+  outgoingSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    if (data.status && data.status !== "pending") return;
+    if (data.recipientId) {
+      outgoingIds.add(data.recipientId);
+    }
+    if (data.recipientEmail) {
+      outgoingEmails.add(`${data.recipientEmail}`.toLowerCase());
+    }
+  });
+
+  const incomingIds = new Set();
+  incomingSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    if (data.status && data.status !== "pending") return;
+    if (data.requesterId) {
+      incomingIds.add(data.requesterId);
+    }
+  });
+
+  const users = userSnap.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((user) => user.id !== req.userId)
+    .map((user) => {
+      const role = roleByUserId.get(user.id);
+      let relation = "none";
+      if (peerIds.has(user.id)) {
+        relation = "connected";
+      } else if (outgoingIds.has(user.id)) {
+        relation = "outgoing";
+      } else if (incomingIds.has(user.id)) {
+        relation = "incoming";
+      } else if (user.email && outgoingEmails.has(user.email.toLowerCase())) {
+        relation = "outgoing";
+      }
+      return {
+        id: user.id,
+        displayName: user.displayName || "",
+        email: user.email || "",
+        photoURL: user.photoURL || "",
+        roleModelId: role?.id || "",
+        roleModelName: role?.name || "",
+        roleModelImageUrl: role?.imageUrl || "",
+        relation
+      };
+    })
+    .filter((user) => {
+      if (!query) return true;
+      const haystack = [
+        user.displayName,
+        user.email,
+        user.roleModelName
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    })
+    .sort((a, b) => `${a.displayName}`.localeCompare(b.displayName));
+
+  res.json({ users });
+});
+
 app.post("/api/social/requests", requireAuth, async (req, res) => {
-  const { email } = req.body || {};
-  if (!email) {
-    return res.status(400).json({ error: "Email required" });
+  const { email, userId } = req.body || {};
+  if (!email && !userId) {
+    return res.status(400).json({ error: "Email or userId required" });
   }
 
-  const normalizedEmail = email.toLowerCase();
-  if (normalizedEmail === req.user.email) {
+  let normalizedEmail = email ? email.toLowerCase() : "";
+  let recipientId = userId || null;
+
+  if (recipientId && recipientId === req.userId) {
     return res.status(400).json({ error: "Cannot add yourself" });
   }
 
-  let recipientId = null;
-  const recipientSnap = await db
-    .collection("users")
-    .where("email", "==", normalizedEmail)
-    .limit(1)
-    .get();
+  if (normalizedEmail && normalizedEmail === req.user.email) {
+    return res.status(400).json({ error: "Cannot add yourself" });
+  }
 
-  if (!recipientSnap.empty) {
-    recipientId = recipientSnap.docs[0].id;
-  } else {
-    try {
-      const authUser = await admin.auth().getUserByEmail(normalizedEmail);
-      if (authUser?.uid) {
-        recipientId = authUser.uid;
-        await ensureUserDocFromAuth(authUser, normalizedEmail);
-      }
-    } catch (error) {
-      if (error?.code !== "auth/user-not-found") {
-        console.warn("Auth lookup failed", error);
+  if (recipientId) {
+    const recipientDoc = await db.collection("users").doc(recipientId).get();
+    if (!recipientDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const recipientData = recipientDoc.data();
+    normalizedEmail = recipientData?.email || normalizedEmail;
+  }
+
+  if (!recipientId && normalizedEmail) {
+    const recipientSnap = await db
+      .collection("users")
+      .where("email", "==", normalizedEmail)
+      .limit(1)
+      .get();
+
+    if (!recipientSnap.empty) {
+      recipientId = recipientSnap.docs[0].id;
+    } else {
+      try {
+        const authUser = await admin.auth().getUserByEmail(normalizedEmail);
+        if (authUser?.uid) {
+          recipientId = authUser.uid;
+          await ensureUserDocFromAuth(authUser, normalizedEmail);
+        }
+      } catch (error) {
+        if (error?.code !== "auth/user-not-found") {
+          console.warn("Auth lookup failed", error);
+        }
       }
     }
   }
@@ -838,7 +1047,7 @@ app.post("/api/social/requests/:id/decline", requireAuth, async (req, res) => {
 });
 
 app.get("/api/social/timeline", requireAuth, async (req, res) => {
-  const query = (req.query.q || "").toString().toLowerCase();
+  const query = (req.query.q || "").toString().toLowerCase().trim();
   const peerRows = await db
     .collection("peers")
     .where("userId", "==", req.userId)
@@ -849,15 +1058,19 @@ app.get("/api/social/timeline", requireAuth, async (req, res) => {
     const peerId = doc.data().peerId;
     const peerDoc = await db.collection("users").doc(peerId).get();
     const peer = peerDoc.data();
+    if (!peer) continue;
+
     let roleModelName = "";
+    let roleModelImageUrl = "";
     let bioText = "";
-    let latestDigestSummary = "";
-    let latestDigestWeek = "";
+    let latestDigest = null;
+    let latestDigestAt = 0;
 
     if (peer?.currentRoleModelId) {
       const roleDoc = await db.collection("roleModels").doc(peer.currentRoleModelId).get();
       const role = roleDoc.data();
       roleModelName = role?.name || "";
+      roleModelImageUrl = role?.imageUrl || "";
       bioText = role?.bioText || "";
 
       const digestSnap = await db
@@ -865,38 +1078,140 @@ app.get("/api/social/timeline", requireAuth, async (req, res) => {
         .where("roleModelId", "==", peer.currentRoleModelId)
         .get();
       if (!digestSnap.empty) {
-        const digests = digestSnap.docs.map((doc) => doc.data());
+        const digests = digestSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         digests.sort((a, b) =>
-          `${b.weekStart || ""}`.localeCompare(a.weekStart || "")
+          `${b.generatedAt || b.weekStart || ""}`.localeCompare(
+            a.generatedAt || a.weekStart || ""
+          )
         );
-        const latest = digests[0] || {};
-        latestDigestSummary = latest.summaryText || "";
-        latestDigestWeek = latest.weekStart || "";
+        const latest = digests[0] || null;
+        if (latest) {
+          latestDigest = {
+            id: latest.id,
+            summaryText: latest.summaryText || "",
+            weekStart: latest.weekStart || "",
+            generatedAt: latest.generatedAt || "",
+            itemCount: Array.isArray(latest.items) ? latest.items.length : 0
+          };
+          const latestDateValue = latest.generatedAt || latest.weekStart || "";
+          const latestDate = new Date(latestDateValue);
+          latestDigestAt = Number.isNaN(latestDate.getTime()) ? 0 : latestDate.getTime();
+        }
       }
     }
 
-    const entry = {
-      id: nanoid(),
+    const baseEntry = {
+      id: latestDigest?.id || peerId,
+      peerId,
       peerName: peer?.displayName || "",
+      peerPhotoURL: peer?.photoURL || "",
       roleModelName,
+      roleModelImageUrl,
       bioText,
-      latestDigestSummary,
-      latestDigestWeek
+      latestDigest,
+      latestDigestAt
     };
 
     const matchesQuery =
       !query ||
-      entry.peerName.toLowerCase().includes(query) ||
-      entry.roleModelName.toLowerCase().includes(query) ||
-      entry.bioText.toLowerCase().includes(query) ||
-      entry.latestDigestSummary.toLowerCase().includes(query);
+      baseEntry.peerName.toLowerCase().includes(query) ||
+      baseEntry.roleModelName.toLowerCase().includes(query) ||
+      baseEntry.bioText.toLowerCase().includes(query) ||
+      baseEntry.latestDigest?.summaryText?.toLowerCase().includes(query) ||
+      baseEntry.latestDigest?.weekStart?.toLowerCase().includes(query);
 
     if (matchesQuery) {
-      entries.push(entry);
+      let reactions = { counts: {}, viewerReaction: null };
+      let comments = [];
+      if (latestDigest?.id) {
+        reactions = await getReactionSummary(latestDigest.id, req.userId);
+        comments = await getDigestCommentsThread(latestDigest.id);
+      }
+      entries.push({ ...baseEntry, reactions, comments });
     }
   }
 
+  entries.sort((a, b) => {
+    const diff = (b.latestDigestAt || 0) - (a.latestDigestAt || 0);
+    if (diff !== 0) return diff;
+    return `${a.peerName}`.localeCompare(b.peerName);
+  });
+
   res.json({ entries });
+});
+
+app.get("/api/social/digests/:digestId/thread", requireAuth, async (req, res) => {
+  const { digestId } = req.params;
+  const [reactions, comments] = await Promise.all([
+    getReactionSummary(digestId, req.userId),
+    getDigestCommentsThread(digestId)
+  ]);
+  res.json({ reactions, comments });
+});
+
+app.post("/api/social/digests/:digestId/reactions", requireAuth, async (req, res) => {
+  const { digestId } = req.params;
+  const type = normalizeReactionType(req.body?.type);
+  if (!type) {
+    return res.status(400).json({ error: "Invalid reaction type" });
+  }
+
+  const docId = `${digestId}_${req.userId}`;
+  const reactionRef = db.collection("digestReactions").doc(docId);
+  const snapshot = await reactionRef.get();
+  const now = new Date().toISOString();
+
+  if (snapshot.exists) {
+    const existing = snapshot.data();
+    if (existing?.type === type) {
+      await reactionRef.delete();
+    } else {
+      await reactionRef.set(
+        {
+          digestId,
+          userId: req.userId,
+          type,
+          createdAt: existing.createdAt || now,
+          updatedAt: now
+        },
+        { merge: true }
+      );
+    }
+  } else {
+    await reactionRef.set({
+      digestId,
+      userId: req.userId,
+      type,
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+
+  const reactions = await getReactionSummary(digestId, req.userId);
+  res.json(reactions);
+});
+
+app.post("/api/social/digests/:digestId/comments", requireAuth, async (req, res) => {
+  const { digestId } = req.params;
+  const text = `${req.body?.text || ""}`.trim();
+  const parentId = req.body?.parentId || null;
+  if (!text) {
+    return res.status(400).json({ error: "Comment required" });
+  }
+
+  const commentId = nanoid();
+  const now = new Date().toISOString();
+  await db.collection("digestComments").doc(commentId).set({
+    id: commentId,
+    digestId,
+    userId: req.userId,
+    text,
+    parentId,
+    createdAt: now
+  });
+
+  const comments = await getDigestCommentsThread(digestId);
+  res.json({ comments });
 });
 
 export const api = onRequest(app);
