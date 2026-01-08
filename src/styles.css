@@ -801,6 +801,15 @@ input:focus {
   background: rgba(255, 255, 255, 0.9);
 }
 
+.role-avatar-inline {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+}
+
 .timeline-entry-meta {
   display: grid;
   gap: 4px;
@@ -829,17 +838,22 @@ input:focus {
   flex-wrap: wrap;
 }
 
-.reaction-row {
+.reaction-bar {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.reaction-button {
+.reaction-control {
+  position: relative;
+}
+
+.reaction-trigger {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
   border: 1px solid rgba(17, 20, 24, 0.12);
   background: rgba(17, 20, 24, 0.05);
@@ -847,17 +861,80 @@ input:focus {
   font-size: 0.85rem;
 }
 
-.reaction-button.active {
+.reaction-trigger i {
+  font-size: 0.9rem;
+}
+
+.reaction-trigger.active {
   background: rgba(31, 191, 154, 0.2);
   border-color: rgba(31, 191, 154, 0.4);
 }
 
-.reaction-button:disabled {
+.reaction-trigger:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.reaction-count {
+.reaction-tray {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(17, 20, 24, 0.12);
+  box-shadow: 0 12px 30px rgba(17, 20, 24, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 5;
+}
+
+.reaction-control:hover .reaction-tray,
+.reaction-control:focus-within .reaction-tray {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.reaction-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(17, 20, 24, 0.12);
+  background: rgba(17, 20, 24, 0.05);
+  cursor: pointer;
+}
+
+.reaction-icon i {
+  font-size: 0.9rem;
+}
+
+.reaction-icon.active {
+  background: rgba(31, 191, 154, 0.2);
+  border-color: rgba(31, 191, 154, 0.4);
+}
+
+.reaction-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reaction-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(17, 20, 24, 0.08);
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
@@ -1300,6 +1377,17 @@ input:focus {
 
 .admin-request-row:last-child {
   border-bottom: none;
+}
+
+.admin-request-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-request-actions button {
+  padding: 6px 12px;
+  font-size: 0.8rem;
 }
 
 @media (max-width: 900px) {

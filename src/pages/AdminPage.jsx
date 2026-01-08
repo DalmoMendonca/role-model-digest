@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { getAdminOverview } from "../api.js";
+import { useEffect, useMemo, useState } from "react";
+import { adminRespondPeerRequest, getAdminOverview } from "../api.js";
 
 function formatDate(value) {
   if (!value) return "";
@@ -29,8 +30,9 @@ export default function AdminPage() {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [busyRequestId, setBusyRequestId] = useState(null);
 
-  useEffect(() => {
+  const loadAdminOverview = () => {
     let isMounted = true;
     setLoading(true);
     setStatus(null);
@@ -49,7 +51,22 @@ export default function AdminPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  };
+
+  useEffect(() => loadAdminOverview(), []);
+
+  const handleRequestAction = async (requestId, action) => {
+    setStatus(null);
+    setBusyRequestId(requestId);
+    try {
+      await adminRespondPeerRequest(requestId, action);
+      loadAdminOverview();
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setBusyRequestId(null);
+    }
+  };
 
   const users = data?.users || [];
   const summary = data?.summary || {};
@@ -242,7 +259,28 @@ export default function AdminPage() {
                         user.incomingRequests.map((req) => (
                           <div key={req.id} className="admin-request-row">
                             <span>{req.requesterName || req.requesterEmail}</span>
-                            <span className="muted">{req.status}</span>
+                            {req.status === "pending" ? (
+                              <div className="admin-request-actions">
+                                <button
+                                  className="secondary"
+                                  type="button"
+                                  onClick={() => handleRequestAction(req.id, "accept")}
+                                  disabled={busyRequestId === req.id}
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  className="ghost"
+                                  type="button"
+                                  onClick={() => handleRequestAction(req.id, "decline")}
+                                  disabled={busyRequestId === req.id}
+                                >
+                                  Decline
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="muted">{req.status}</span>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -255,7 +293,28 @@ export default function AdminPage() {
                         user.outgoingRequests.map((req) => (
                           <div key={req.id} className="admin-request-row">
                             <span>{req.recipientName || req.recipientEmail}</span>
-                            <span className="muted">{req.status}</span>
+                            {req.status === "pending" ? (
+                              <div className="admin-request-actions">
+                                <button
+                                  className="secondary"
+                                  type="button"
+                                  onClick={() => handleRequestAction(req.id, "accept")}
+                                  disabled={busyRequestId === req.id}
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  className="ghost"
+                                  type="button"
+                                  onClick={() => handleRequestAction(req.id, "decline")}
+                                  disabled={busyRequestId === req.id}
+                                >
+                                  Decline
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="muted">{req.status}</span>
+                            )}
                           </div>
                         ))
                       ) : (

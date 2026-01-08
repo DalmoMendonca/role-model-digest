@@ -10,10 +10,14 @@ import {
 } from "../api.js";
 
 const reactions = [
-  { type: "like", emoji: "+1", label: "Like" },
-  { type: "love", emoji: "<3", label: "Love" },
-  { type: "clap", emoji: "Clap", label: "Clap" },
-  { type: "insightful", emoji: "Idea", label: "Insightful" }
+  { type: "like", icon: "fa-thumbs-up", label: "Like" },
+  { type: "love", icon: "fa-heart", label: "Love" },
+  { type: "laugh", icon: "fa-face-laugh-squint", label: "Laugh" },
+  { type: "wow", icon: "fa-face-surprise", label: "Wow" },
+  { type: "insightful", icon: "fa-lightbulb", label: "Insightful" },
+  { type: "spicy", icon: "fa-fire", label: "Spicy" },
+  { type: "charged", icon: "fa-bolt", label: "Charged" },
+  { type: "star", icon: "fa-star", label: "Legendary" }
 ];
 
 function formatDateTime(value) {
@@ -208,7 +212,7 @@ export default function SocialPage() {
       const data = await addDigestReaction(digestId, type);
       setTimeline((prev) =>
         prev.map((entry) =>
-          entry.latestDigest?.id === digestId ? { ...entry, reactions: data } : entry
+          entry.digestId === digestId ? { ...entry, reactions: data } : entry
         )
       );
     } catch (error) {
@@ -235,7 +239,7 @@ export default function SocialPage() {
       const data = await addDigestComment(digestId, { text, parentId });
       setTimeline((prev) =>
         prev.map((entry) =>
-          entry.latestDigest?.id === digestId ? { ...entry, comments: data.comments } : entry
+          entry.digestId === digestId ? { ...entry, comments: data.comments } : entry
         )
       );
       if (parentId) {
@@ -256,7 +260,7 @@ export default function SocialPage() {
       <header className="page-header">
         <div>
           <p className="eyebrow">Social</p>
-          <h2>Share the weekly ritual</h2>
+          <h2>More Role Models</h2>
         </div>
         <form className="inline-form" onSubmit={handleRequest}>
           <input
@@ -291,11 +295,14 @@ export default function SocialPage() {
         </div>
         <div className="timeline">
           {sortedTimeline.map((entry) => {
-            const digest = entry.latestDigest;
-            const digestDate = digest?.generatedAt || digest?.weekStart || "";
+            const digestId = entry.digestId || entry.id;
+            const digestDate = entry.generatedAt || entry.weekStart || "";
             const reactionsByType = entry.reactions?.counts || {};
+            const activeReactions = reactions.filter(
+              (reaction) => (reactionsByType[reaction.type] || 0) > 0
+            );
             return (
-              <article key={entry.id} className="timeline-entry">
+              <article key={digestId} className="timeline-entry">
                 <div className="timeline-entry-header">
                   <div className="timeline-avatars">
                     <Avatar
@@ -321,46 +328,65 @@ export default function SocialPage() {
                   <p className="timeline-date">{formatDateTime(digestDate)}</p>
                 </div>
                 <p className="timeline-summary">
-                  {digest?.summaryText || "No digest yet."}
+                  {entry.summaryText || "No digest summary yet."}
                 </p>
-                {digest ? (
-                  <div className="timeline-details">
-                    <span className="digest-chip">
-                      {digest.itemCount || 0} sources
-                    </span>
-                  </div>
-                ) : null}
-                <div className="reaction-row">
-                  {reactions.map((reaction) => (
+                <div className="reaction-bar">
+                  <div className="reaction-control">
                     <button
-                      key={reaction.type}
-                      className={`reaction-button ${
-                        entry.reactions?.viewerReaction === reaction.type ? "active" : ""
+                      className={`reaction-trigger ${
+                        entry.reactions?.viewerReaction ? "active" : ""
                       }`}
                       type="button"
-                      onClick={() => digest && handleReact(digest.id, reaction.type)}
-                      disabled={!digest}
+                      aria-label="React to digest"
+                      disabled={!digestId}
                     >
-                      <span>{reaction.emoji}</span>
-                      <span className="reaction-count">{reactionsByType[reaction.type] || 0}</span>
+                      <i className="fa-solid fa-face-smile" aria-hidden="true" />
+                      <span>React</span>
                     </button>
-                  ))}
+                    <div className="reaction-tray" role="group" aria-label="Choose a reaction">
+                      {reactions.map((reaction) => (
+                        <button
+                          key={reaction.type}
+                          className={`reaction-icon ${
+                            entry.reactions?.viewerReaction === reaction.type ? "active" : ""
+                          }`}
+                          type="button"
+                          title={reaction.label}
+                          aria-label={reaction.label}
+                          onClick={() => digestId && handleReact(digestId, reaction.type)}
+                          disabled={!digestId}
+                        >
+                          <i className={`fa-solid ${reaction.icon}`} aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {activeReactions.length ? (
+                    <div className="reaction-summary">
+                      {activeReactions.map((reaction) => (
+                        <span key={reaction.type} className="reaction-count-pill">
+                          <i className={`fa-solid ${reaction.icon}`} aria-hidden="true" />
+                          <span>{reactionsByType[reaction.type]}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="comments">
                   <h4>Comments</h4>
-                  {digest ? (
+                  {digestId ? (
                     <>
                       <form
                         className="comment-form"
                         onSubmit={(event) => {
                           event.preventDefault();
-                          handleSubmitComment(digest.id);
+                          handleSubmitComment(digestId);
                         }}
                       >
                         <input
                           type="text"
-                          value={commentDrafts[digest.id] || ""}
-                          onChange={(event) => handleCommentChange(digest.id, event.target.value)}
+                          value={commentDrafts[digestId] || ""}
+                          onChange={(event) => handleCommentChange(digestId, event.target.value)}
                           placeholder="Add a comment"
                           required
                         />
@@ -372,7 +398,7 @@ export default function SocialPage() {
                         <div className="comment-thread">
                           <CommentThread
                             comments={entry.comments}
-                            digestId={digest.id}
+                            digestId={digestId}
                             replyDrafts={replyDrafts}
                             replyingTo={replyingTo}
                             onReplyChange={handleReplyChange}
@@ -423,13 +449,13 @@ export default function SocialPage() {
               </div>
               {user.roleModelImageUrl ? (
                 <img
-                  className="role-avatar"
+                  className="role-avatar-inline"
                   src={user.roleModelImageUrl}
                   alt={user.roleModelName || "Role model"}
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <span className="role-avatar avatar-fallback">RM</span>
+                <span className="role-avatar-inline avatar-fallback">RM</span>
               )}
               <div className="discover-actions">
                 {user.relation === "connected" ? (
@@ -465,16 +491,16 @@ export default function SocialPage() {
             <div key={peer.id} className="peer-chip">
               <div className="peer-chip-header">
                 <Avatar className="avatar" url={peer.photoURL} name={peer.displayName} />
-                {peer.roleModelImageUrl ? (
-                  <img
-                    className="role-avatar"
-                    src={peer.roleModelImageUrl}
-                    alt={peer.roleModelName || "Role model"}
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="role-avatar avatar-fallback">RM</span>
-                )}
+              {peer.roleModelImageUrl ? (
+                <img
+                  className="role-avatar-inline"
+                  src={peer.roleModelImageUrl}
+                  alt={peer.roleModelName || "Role model"}
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="role-avatar-inline avatar-fallback">RM</span>
+              )}
               </div>
               <p className="peer-name">{peer.displayName}</p>
               <p className="muted">{peer.roleModelName || "No role model"}</p>

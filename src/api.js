@@ -127,6 +127,12 @@ export function getAdminOverview() {
   return apiRequest("/api/admin/overview");
 }
 
+export function adminRespondPeerRequest(requestId, action) {
+  return apiRequest(`/api/admin/requests/${requestId}/${action}`, {
+    method: "POST"
+  });
+}
+
 export function addDigestReaction(digestId, type) {
   return apiRequest(`/api/social/digests/${digestId}/reactions`, {
     method: "POST",

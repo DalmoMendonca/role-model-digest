@@ -169,7 +169,71 @@ async function attachPendingPeerRequests(userId, normalizedEmail) {
   await batch.commit();
 }
 
-const reactionTypes = ["like", "love", "clap", "insightful"];
+async function ensurePeerConnection(userId, peerId) {
+  if (!userId || !peerId) return;
+  const existing = await db
+    .collection("peers")
+    .where("userId", "==", userId)
+    .where("peerId", "==", peerId)
+    .limit(1)
+    .get();
+  if (!existing.empty) return;
+  await db.collection("peers").doc(nanoid()).set({
+    userId,
+    peerId,
+    createdAt: new Date().toISOString()
+  });
+}
+
+async function acceptPeerRequest(requestId) {
+  const requestRef = db.collection("peerRequests").doc(requestId);
+  const requestSnap = await requestRef.get();
+  if (!requestSnap.exists) {
+    return { ok: false, status: 404, error: "Request not found" };
+  }
+  const data = requestSnap.data();
+  if (!data?.requesterId || !data?.recipientId) {
+    return { ok: false, status: 400, error: "Request invalid" };
+  }
+
+  const now = new Date().toISOString();
+  if (data.status !== "accepted") {
+    await requestRef.update({
+      status: "accepted",
+      updatedAt: now
+    });
+  }
+
+  await ensurePeerConnection(data.recipientId, data.requesterId);
+  await ensurePeerConnection(data.requesterId, data.recipientId);
+
+  return { ok: true, status: 200, payload: { status: "accepted" } };
+}
+
+async function declinePeerRequest(requestId) {
+  const requestRef = db.collection("peerRequests").doc(requestId);
+  const requestSnap = await requestRef.get();
+  if (!requestSnap.exists) {
+    return { ok: false, status: 404, error: "Request not found" };
+  }
+  const now = new Date().toISOString();
+  await requestRef.update({
+    status: "declined",
+    updatedAt: now
+  });
+  return { ok: true, status: 200, payload: { status: "declined" } };
+}
+
+const reactionTypes = [
+  "like",
+  "love",
+  "laugh",
+  "wow",
+  "insightful",
+  "spicy",
+  "charged",
+  "star"
+];
 
 function normalizeReactionType(type) {
   const normalized = `${type || ""}`.toLowerCase().trim();
@@ -700,6 +764,28 @@ app.get("/api/admin/overview", requireAuth, async (req, res) => {
   res.json({ summary, users: adminUsers });
 });
 
+app.post("/api/admin/requests/:id/accept", requireAuth, async (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const result = await acceptPeerRequest(req.params.id);
+  if (!result.ok) {
+    return res.status(result.status).json({ error: result.error });
+  }
+  return res.json(result.payload);
+});
+
+app.post("/api/admin/requests/:id/decline", requireAuth, async (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const result = await declinePeerRequest(req.params.id);
+  if (!result.ok) {
+    return res.status(result.status).json({ error: result.error });
+  }
+  return res.json(result.payload);
+});
+
 app.get("/api/social/peers", requireAuth, async (req, res) => {
   const peerRows = await db
     .collection("peers")
@@ -1009,26 +1095,11 @@ app.post("/api/social/requests/:id/accept", requireAuth, async (req, res) => {
   if (!requestSnap.exists || requestSnap.data().recipientId !== req.userId) {
     return res.status(404).json({ error: "Request not found" });
   }
-
-  const now = new Date().toISOString();
-  await db.collection("peerRequests").doc(requestId).update({
-    status: "accepted",
-    updatedAt: now
-  });
-
-  const requesterId = requestSnap.data().requesterId;
-  await db.collection("peers").doc(nanoid()).set({
-    userId: req.userId,
-    peerId: requesterId,
-    createdAt: now
-  });
-  await db.collection("peers").doc(nanoid()).set({
-    userId: requesterId,
-    peerId: req.userId,
-    createdAt: now
-  });
-
-  res.json({ status: "accepted" });
+  const result = await acceptPeerRequest(requestId);
+  if (!result.ok) {
+    return res.status(result.status).json({ error: result.error });
+  }
+  return res.json(result.payload);
 });
 
 app.post("/api/social/requests/:id/decline", requireAuth, async (req, res) => {
@@ -1037,13 +1108,11 @@ app.post("/api/social/requests/:id/decline", requireAuth, async (req, res) => {
   if (!requestSnap.exists || requestSnap.data().recipientId !== req.userId) {
     return res.status(404).json({ error: "Request not found" });
   }
-
-  await db.collection("peerRequests").doc(requestId).update({
-    status: "declined",
-    updatedAt: new Date().toISOString()
-  });
-
-  res.json({ status: "declined" });
+  const result = await declinePeerRequest(requestId);
+  if (!result.ok) {
+    return res.status(result.status).json({ error: result.error });
+  }
+  return res.json(result.payload);
 });
 
 app.get("/api/social/timeline", requireAuth, async (req, res) => {
@@ -1053,91 +1122,95 @@ app.get("/api/social/timeline", requireAuth, async (req, res) => {
     .where("userId", "==", req.userId)
     .get();
 
+  const peerIds = peerRows.docs
+    .map((doc) => doc.data().peerId)
+    .filter(Boolean);
+  const userIds = Array.from(new Set([req.userId, ...peerIds]));
+  const userDocs = await Promise.all(
+    userIds.map((userId) => db.collection("users").doc(userId).get())
+  );
+  const userMap = new Map(
+    userDocs
+      .filter((doc) => doc.exists)
+      .map((doc) => [doc.id, doc.data()])
+  );
+
   const entries = [];
-  for (const doc of peerRows.docs) {
-    const peerId = doc.data().peerId;
-    const peerDoc = await db.collection("users").doc(peerId).get();
-    const peer = peerDoc.data();
-    if (!peer) continue;
 
-    let roleModelName = "";
-    let roleModelImageUrl = "";
-    let bioText = "";
-    let latestDigest = null;
-    let latestDigestAt = 0;
+  for (const userId of userIds) {
+    const user = userMap.get(userId);
+    if (!user) continue;
 
-    if (peer?.currentRoleModelId) {
-      const roleDoc = await db.collection("roleModels").doc(peer.currentRoleModelId).get();
+    const roleSnap = await db
+      .collection("roleModels")
+      .where("userId", "==", userId)
+      .get();
+
+    for (const roleDoc of roleSnap.docs) {
       const role = roleDoc.data();
-      roleModelName = role?.name || "";
-      roleModelImageUrl = role?.imageUrl || "";
-      bioText = role?.bioText || "";
-
       const digestSnap = await db
         .collection("digests")
-        .where("roleModelId", "==", peer.currentRoleModelId)
+        .where("roleModelId", "==", roleDoc.id)
         .get();
-      if (!digestSnap.empty) {
-        const digests = digestSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        digests.sort((a, b) =>
-          `${b.generatedAt || b.weekStart || ""}`.localeCompare(
-            a.generatedAt || a.weekStart || ""
-          )
-        );
-        const latest = digests[0] || null;
-        if (latest) {
-          latestDigest = {
-            id: latest.id,
-            summaryText: latest.summaryText || "",
-            weekStart: latest.weekStart || "",
-            generatedAt: latest.generatedAt || "",
-            itemCount: Array.isArray(latest.items) ? latest.items.length : 0
-          };
-          const latestDateValue = latest.generatedAt || latest.weekStart || "";
-          const latestDate = new Date(latestDateValue);
-          latestDigestAt = Number.isNaN(latestDate.getTime()) ? 0 : latestDate.getTime();
+
+      for (const digestDoc of digestSnap.docs) {
+        const digest = digestDoc.data();
+        const summaryText = digest?.summaryText || "";
+        const digestDateValue = digest?.generatedAt || digest?.weekStart || "";
+        const digestDate = new Date(digestDateValue);
+        const digestTimestamp = Number.isNaN(digestDate.getTime())
+          ? 0
+          : digestDate.getTime();
+
+        const entry = {
+          id: digestDoc.id,
+          digestId: digestDoc.id,
+          summaryText,
+          weekStart: digest?.weekStart || "",
+          generatedAt: digest?.generatedAt || "",
+          itemCount: Array.isArray(digest?.items) ? digest.items.length : 0,
+          peerId: userId,
+          peerName: user?.displayName || "",
+          peerPhotoURL: user?.photoURL || "",
+          roleModelId: roleDoc.id,
+          roleModelName: role?.name || "",
+          roleModelImageUrl: role?.imageUrl || "",
+          isSelf: userId === req.userId,
+          digestTimestamp
+        };
+
+        const weekStartValue = `${entry.weekStart || ""}`.toLowerCase();
+        const matchesQuery =
+          !query ||
+          entry.peerName.toLowerCase().includes(query) ||
+          entry.roleModelName.toLowerCase().includes(query) ||
+          summaryText.toLowerCase().includes(query) ||
+          weekStartValue.includes(query);
+
+        if (matchesQuery) {
+          entries.push(entry);
         }
       }
     }
-
-    const baseEntry = {
-      id: latestDigest?.id || peerId,
-      peerId,
-      peerName: peer?.displayName || "",
-      peerPhotoURL: peer?.photoURL || "",
-      roleModelName,
-      roleModelImageUrl,
-      bioText,
-      latestDigest,
-      latestDigestAt
-    };
-
-    const matchesQuery =
-      !query ||
-      baseEntry.peerName.toLowerCase().includes(query) ||
-      baseEntry.roleModelName.toLowerCase().includes(query) ||
-      baseEntry.bioText.toLowerCase().includes(query) ||
-      baseEntry.latestDigest?.summaryText?.toLowerCase().includes(query) ||
-      baseEntry.latestDigest?.weekStart?.toLowerCase().includes(query);
-
-    if (matchesQuery) {
-      let reactions = { counts: {}, viewerReaction: null };
-      let comments = [];
-      if (latestDigest?.id) {
-        reactions = await getReactionSummary(latestDigest.id, req.userId);
-        comments = await getDigestCommentsThread(latestDigest.id);
-      }
-      entries.push({ ...baseEntry, reactions, comments });
-    }
   }
 
-  entries.sort((a, b) => {
-    const diff = (b.latestDigestAt || 0) - (a.latestDigestAt || 0);
+  const entriesWithThreads = await Promise.all(
+    entries.map(async (entry) => {
+      const [reactions, comments] = await Promise.all([
+        getReactionSummary(entry.digestId, req.userId),
+        getDigestCommentsThread(entry.digestId)
+      ]);
+      return { ...entry, reactions, comments };
+    })
+  );
+
+  entriesWithThreads.sort((a, b) => {
+    const diff = (b.digestTimestamp || 0) - (a.digestTimestamp || 0);
     if (diff !== 0) return diff;
     return `${a.peerName}`.localeCompare(b.peerName);
   });
 
-  res.json({ entries });
+  res.json({ entries: entriesWithThreads });
 });
 
 app.get("/api/social/digests/:digestId/thread", requireAuth, async (req, res) => {
