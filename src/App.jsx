@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { getMe, getRoleModelImage, logout } from "./api.js";
+import { onAuthChange } from "./firebase.js";
 import AuthScreen from "./components/AuthScreen.jsx";
 import Nav from "./components/Nav.jsx";
 import RoleModelSetup from "./components/RoleModelSetup.jsx";
@@ -31,23 +32,36 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
-    getMe()
-      .then((data) => {
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
+      if (!isMounted) return;
+      if (!firebaseUser) {
+        setUser(null);
+        setRoleModel(null);
+        setLoading(false);
+        return;
+      }
+      try {
+        const data = await getMe();
         if (!isMounted) return;
         setUser(data.user || null);
         setRoleModel(data.roleModel || null);
-      })
-      .catch(() => {
+      } catch (error) {
         if (!isMounted) return;
-        setUser(null);
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName || firebaseUser.email || "User",
+          weeklyEmailOptIn: true
+        });
         setRoleModel(null);
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) setLoading(false);
-      });
+      }
+    });
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, []);
 
@@ -85,11 +99,6 @@ export default function App() {
     }
   };
 
-  const handleAuth = (data) => {
-    setUser(data.user);
-    setRoleModel(data.roleModel || null);
-  };
-
   const handleLogout = async () => {
     await logout();
     setUser(null);
@@ -106,13 +115,20 @@ export default function App() {
       );
     }
 
-    if (!user) {
-      return <AuthScreen onAuth={handleAuth} />;
-    }
+  if (!user) {
+    return <AuthScreen />;
+  }
 
-    if (!roleModel) {
-      return <RoleModelSetup onComplete={handleAuth} />;
-    }
+  if (!roleModel) {
+    return (
+      <RoleModelSetup
+        onComplete={(data) => {
+          setUser(data.user || user);
+          setRoleModel(data.roleModel || null);
+        }}
+      />
+    );
+  }
 
     return (
       <div className="app-shell">

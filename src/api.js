@@ -1,12 +1,19 @@
+import { auth, signOutUser } from "./firebase.js";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export async function apiRequest(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
+    headers,
     ...options
   });
 
@@ -33,24 +40,8 @@ export function getMe() {
   return apiRequest("/api/me");
 }
 
-export function signup(payload) {
-  return apiRequest("/api/auth/signup", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-}
-
-export function login(payload) {
-  return apiRequest("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-}
-
 export function logout() {
-  return apiRequest("/api/auth/logout", {
-    method: "POST"
-  });
+  return signOutUser();
 }
 
 export function setRoleModel(payload) {

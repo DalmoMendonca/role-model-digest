@@ -1,6 +1,10 @@
 node_modules/
+functions/node_modules/
 dist/
 server/data/
+.firebase/
+functions/.env
+functions/.runtimeconfig.json
 .env
 .env.*
 npm-debug.log*

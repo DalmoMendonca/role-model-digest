@@ -1,22 +1,20 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { signInWithGoogle } from "../firebase.js";
 
-export default function AuthScreen({ onAuth }) {
+export default function AuthScreen() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("auth") === "google" && params.get("status") === "error") {
-      setStatus("Google sign-in failed. Please try again.");
-    }
-    if (params.get("auth") === "google") {
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, []);
-
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setLoading(true);
-    window.location.href = "/api/auth/google";
+    setStatus(null);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      setStatus("Google sign-in failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
