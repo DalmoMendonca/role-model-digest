@@ -146,10 +146,23 @@ async function serperSearch(query, endpoint, options = {}) {
   });
 
   if (!response.ok) {
-    throw new Error("Search provider error");
+    const text = await response.text();
+    const error = new Error(`Search provider error (${response.status})`);
+    error.status = response.status;
+    error.body = text.slice(0, 300);
+    throw error;
   }
 
   return response.json();
+}
+
+async function safeSerperSearch(query, endpoint, options = {}) {
+  try {
+    const data = await serperSearch(query, endpoint, options);
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error };
+  }
 }
 
 function mapSearchItems(response) {
@@ -218,24 +231,51 @@ export async function validateRoleModel({ name }) {
   }
 
   if (!SERPER_API_KEY) {
-    throw new Error("Serper API key is required for role model validation");
+    const error = new Error("Serper API key is required for role model validation");
+    error.code = "SERPER_API_KEY_MISSING";
+    throw error;
   }
 
   const [recentSearch, recentNews, deathSearch, profileSearch, wikidataDeath] = await Promise.all([
-    serperSearch(normalizedName, "search", { tbs: "qdr:y" }),
-    serperSearch(normalizedName, "news", { tbs: "qdr:y" }),
-    serperSearch(
+    safeSerperSearch(normalizedName, "search", { tbs: "qdr:y" }),
+    safeSerperSearch(normalizedName, "news", { tbs: "qdr:y" }),
+    safeSerperSearch(
       `${normalizedName} obituary OR died OR death OR "passed away"`,
       "search"
     ),
-    serperSearch(
+    safeSerperSearch(
       `${normalizedName} (site:instagram.com OR site:x.com OR site:twitter.com OR site:tiktok.com OR site:youtube.com OR site:linkedin.com)`,
       "search"
     ),
     hasWikidataDeathDate(normalizedName)
   ]);
 
-  if (isOrganizationResponse(recentSearch)) {
+  const serperFailures = [recentSearch, recentNews, deathSearch, profileSearch].filter(
+    (result) => !result.ok
+  );
+
+  if (serperFailures.length === 4) {
+    const firstError = serperFailures[0]?.error;
+    const status = firstError?.status ? ` (${firstError.status})` : "";
+    const message = firstError?.message || "Search provider error";
+    throw new Error(`Search provider unavailable${status}: ${message}`);
+  }
+
+  if (serperFailures.length) {
+    console.warn("Search provider partial failure", {
+      failures: serperFailures.map((result) => ({
+        message: result.error?.message || "Search provider error",
+        status: result.error?.status || null
+      }))
+    });
+  }
+
+  const recentSearchData = recentSearch.ok ? recentSearch.data : null;
+  const recentNewsData = recentNews.ok ? recentNews.data : null;
+  const deathSearchData = deathSearch.ok ? deathSearch.data : null;
+  const profileSearchData = profileSearch.ok ? profileSearch.data : null;
+
+  if (isOrganizationResponse(recentSearchData)) {
     return {
       ok: false,
       reason: "Role models must be living people, not organizations."
@@ -243,14 +283,14 @@ export async function validateRoleModel({ name }) {
   }
 
   const recentItems = dedupeByUrl([
-    ...mapSearchItems(recentSearch),
-    ...mapNewsItems(recentNews)
+    ...mapSearchItems(recentSearchData),
+    ...mapNewsItems(recentNewsData)
   ]);
   const recentDomains = new Set(
     recentItems.map((item) => extractDomain(item.url)).filter(Boolean)
   );
 
-  const profileItems = mapSearchItems(profileSearch);
+  const profileItems = mapSearchItems(profileSearchData);
   const profileDomains = new Set(
     profileItems.map((item) => extractDomain(item.url)).filter(Boolean)
   );
@@ -267,7 +307,7 @@ export async function validateRoleModel({ name }) {
     };
   }
 
-  const deathItems = mapSearchItems(deathSearch);
+  const deathItems = mapSearchItems(deathSearchData);
   const deathSignals = deathItems.filter((item) =>
     hasDeathSignal(item, normalizedName)
   ).length;
