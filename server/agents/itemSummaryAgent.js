@@ -36,8 +36,7 @@ function safeJsonParse(text) {
 function normalizeSummarySentence(text) {
   const trimmed = `${text || ""}`.trim();
   if (!trimmed) return "";
-  const firstSentence = trimmed.split(/(?<=[.!?])\s+/)[0] || trimmed;
-  const normalized = firstSentence.trim();
+  const normalized = trimmed;
   if (!/[.!?]$/.test(normalized)) {
     return `${normalized}.`;
   }

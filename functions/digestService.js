@@ -114,14 +114,15 @@ function getItemKey(item) {
 }
 
 export async function getDigestsForRoleModel(db, roleModelId, limit = 6) {
+  if (!roleModelId) {
+    return [];
+  }
   const snapshot = await db
     .collection("digests")
     .where("roleModelId", "==", roleModelId)
-    .orderBy("weekStart", "desc")
-    .limit(limit)
     .get();
 
-  return snapshot.docs.map((doc) => {
+  const digests = snapshot.docs.map((doc) => {
     const data = doc.data();
     return {
       id: doc.id,
@@ -133,6 +134,9 @@ export async function getDigestsForRoleModel(db, roleModelId, limit = 6) {
       items: Array.isArray(data.items) ? data.items : []
     };
   });
+
+  digests.sort((a, b) => `${b.weekStart || ""}`.localeCompare(a.weekStart || ""));
+  return digests.slice(0, limit);
 }
 
 export async function getPublicDigest(db, digestId) {
@@ -160,10 +164,12 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
   const existingSnap = await db
     .collection("digests")
     .where("roleModelId", "==", roleModel.id)
-    .where("weekStart", "==", weekStart)
-    .limit(1)
     .get();
-  const existingDoc = existingSnap.empty ? null : existingSnap.docs[0];
+  const existingDocs = existingSnap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+  const existingDoc = existingDocs.find((doc) => doc.weekStart === weekStart) || null;
 
   if (existingDoc && !force) {
     return getDigestsForRoleModel(db, roleModel.id);
@@ -176,15 +182,13 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     .get();
   const customSources = customSourceSnap.docs.map((doc) => doc.data());
 
-  const previousSnap = await db
-    .collection("digests")
-    .where("roleModelId", "==", roleModel.id)
-    .orderBy("weekStart", "desc")
-    .limit(6)
-    .get();
+  const sortedPrevious = existingDocs
+    .slice()
+    .sort((a, b) => `${b.weekStart || ""}`.localeCompare(a.weekStart || ""))
+    .slice(0, 6);
   const previousKeys = [];
-  previousSnap.forEach((doc) => {
-    const items = Array.isArray(doc.data().items) ? doc.data().items : [];
+  sortedPrevious.forEach((doc) => {
+    const items = Array.isArray(doc.items) ? doc.items : [];
     items.forEach((item) => {
       previousKeys.push(
         `${item.sourceUrl || ""}|${item.sourceTitle || ""}`.toLowerCase()

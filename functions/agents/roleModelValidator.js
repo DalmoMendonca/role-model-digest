@@ -256,9 +256,34 @@ export async function validateRoleModel({ name }) {
 
   if (serperFailures.length === 4) {
     const firstError = serperFailures[0]?.error;
-    const status = firstError?.status ? ` (${firstError.status})` : "";
+    const statusCode = firstError?.status || null;
+    const status = statusCode ? ` (${statusCode})` : "";
     const message = firstError?.message || "Search provider error";
-    throw new Error(`Search provider unavailable${status}: ${message}`);
+    let detail = "";
+    const rawBody = firstError?.body;
+    if (rawBody) {
+      try {
+        const parsed = JSON.parse(rawBody);
+        detail = parsed?.message ? String(parsed.message) : rawBody;
+      } catch (parseError) {
+        detail = rawBody;
+      }
+      detail = detail.replace(/\s+/g, " ").trim();
+      if (detail.length > 160) {
+        detail = detail.slice(0, 160);
+      }
+    }
+    const error = new Error(
+      `Search provider unavailable${status}: ${detail || message}`
+    );
+    error.code = "SEARCH_PROVIDER_UNAVAILABLE";
+    if (statusCode) {
+      error.status = statusCode;
+    }
+    if (detail) {
+      error.detail = detail;
+    }
+    throw error;
   }
 
   if (serperFailures.length) {

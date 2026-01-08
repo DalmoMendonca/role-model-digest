@@ -139,7 +139,27 @@ app.post("/api/role-model", requireAuth, async (req, res) => {
     }
   } catch (error) {
     console.error("Role model validation failed", error);
-    return res.status(503).json({ error: "Role model validation unavailable" });
+    let message = "Role model validation unavailable";
+    const detail = typeof error?.detail === "string" ? error.detail : "";
+    const loweredDetail = detail.toLowerCase();
+    const loweredMessage =
+      typeof error?.message === "string" ? error.message.toLowerCase() : "";
+
+    if (error?.code === "SERPER_API_KEY_MISSING") {
+      message =
+        "Search provider key missing. Set SERPER_API_KEY to enable validation.";
+    } else if (error?.code === "SEARCH_PROVIDER_UNAVAILABLE") {
+      if (loweredDetail.includes("not enough credits") || loweredMessage.includes("not enough credits")) {
+        message =
+          "Search provider out of credits. Add Serper credits to continue.";
+      } else if (detail) {
+        message = `Search provider unavailable: ${detail}`;
+      } else {
+        message = "Search provider unavailable. Please try again shortly.";
+      }
+    }
+
+    return res.status(503).json({ error: message });
   }
 
   const roleModelsRef = db.collection("roleModels");
@@ -310,7 +330,11 @@ app.post("/api/digests/run", requireAuth, async (req, res) => {
     res.json({ digests });
   } catch (error) {
     console.error("Digest generation failed", error);
-    res.status(502).json({ error: "Digest generation failed" });
+    const detail = typeof error?.message === "string" ? error.message : "";
+    const message = detail
+      ? `Digest generation failed: ${detail}`
+      : "Digest generation failed";
+    res.status(502).json({ error: message });
   }
 });
 

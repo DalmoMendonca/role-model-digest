@@ -346,6 +346,20 @@ input:focus {
   gap: 16px;
 }
 
+.notfound-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.notfound-actions a {
+  text-decoration: none;
+}
+
+.notfound-note {
+  font-size: 0.9rem;
+}
+
 .auth-divider {
   display: flex;
   align-items: center;

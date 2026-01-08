@@ -7,6 +7,7 @@ import Nav from "./components/Nav.jsx";
 import RoleModelSetup from "./components/RoleModelSetup.jsx";
 import BioPage from "./pages/BioPage.jsx";
 import DigestPage from "./pages/DigestPage.jsx";
+import NotFoundPage from "./pages/NotFoundPage.jsx";
 import PublicDigestPage from "./pages/PublicDigestPage.jsx";
 import SocialPage from "./pages/SocialPage.jsx";
 
@@ -161,7 +162,7 @@ export default function App() {
             />
             <Route path="/social" element={<SocialPage />} />
             <Route path="/" element={<Navigate to="/bio" replace />} />
-            <Route path="*" element={<Navigate to="/bio" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </main>
       </div>

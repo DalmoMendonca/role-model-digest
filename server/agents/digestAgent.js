@@ -114,47 +114,13 @@ function extractOutputText(data) {
 }
 
 function normalizeSummary(text, roleModelName) {
-  if (!text) {
+  const trimmed = `${text || ""}`.trim();
+  if (!trimmed) {
     return `This week focused on a scan of ${roleModelName}'s latest signals.`;
   }
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  const first = sentences[0]?.trim();
-  return pruneRoleModelRepeats(first || text.trim(), roleModelName);
+  return pruneRoleModelRepeats(trimmed, roleModelName);
 }
 
-function isGenericSummary(text) {
-  const lowerText = text.toLowerCase();
-  const wordCount = text.trim().split(/\s+/).length;
-  if (wordCount < 8) {
-    return true;
-  }
-  const genericPhrases = [
-    "fresh mentions",
-    "latest updates",
-    "recent updates",
-    "tied to",
-    "coverage",
-    "variety of",
-    "mix of",
-    "public updates"
-  ];
-  return genericPhrases.some((phrase) => lowerText.includes(phrase));
-}
-
-function isListSummary(text, roleModelName) {
-  const wordCount = text.trim().split(/\s+/).length;
-  const commaCount = (text.match(/,/g) || []).length;
-  const andCount = (text.match(/\band\b/gi) || []).length;
-  const nameCount = roleModelName
-    ? (text.match(new RegExp(escapeRegExp(roleModelName), "gi")) || []).length
-    : 0;
-  if (wordCount > 28) return true;
-  if (commaCount > 1) return true;
-  if (andCount > 2) return true;
-  if (nameCount > 1) return true;
-  if (text.includes(";") || text.includes(":")) return true;
-  return false;
-}
 
 function buildThemeFromCandidates(candidates, roleModelName) {
   const typeRank = { news: 0, video: 1, social: 2, web: 3, custom: 4 };
@@ -177,7 +143,7 @@ function buildThemeFromCandidates(candidates, roleModelName) {
   const title = `${lead.title || lead.url || roleModelName}`.trim();
   const snippet = `${lead.snippet || ""}`.trim();
   const snippetSentence = snippet
-    ? snippet.split(/(?<=[.!?])\s+/)[0]?.replace(/[.!?]+$/, "")
+    ? snippet.replace(/[.!?]+$/, "")
     : "";
   const cleanedSnippet = pruneRoleModelRepeats(snippetSentence || "", roleModelName);
 
@@ -296,10 +262,7 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
     return buildFallback(deduped, roleModelName);
   }
 
-  const summaryCandidate = normalizeSummary(parsed.summaryText, roleModelName);
-  const summaryText = isGenericSummary(summaryCandidate) || isListSummary(summaryCandidate, roleModelName)
-    ? buildThemeFromCandidates(deduped, roleModelName)
-    : summaryCandidate;
+  const summaryText = normalizeSummary(parsed.summaryText, roleModelName);
   const topics = Array.isArray(parsed.topics)
     ? parsed.topics.map((topic) => `${topic}`.trim()).filter(Boolean).slice(0, 6)
     : [];
