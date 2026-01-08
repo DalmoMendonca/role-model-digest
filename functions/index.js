@@ -74,6 +74,7 @@ async function ensureUserDoc(decoded) {
       createdAt: new Date().toISOString()
     };
     await userRef.set(payload);
+    await attachPendingPeerRequests(decoded.uid, normalizedEmail);
     return payload;
   }
   const data = snapshot.data();
@@ -90,7 +91,26 @@ async function ensureUserDoc(decoded) {
   if (Object.keys(updates).length) {
     await userRef.update(updates);
   }
+  await attachPendingPeerRequests(decoded.uid, normalizedEmail);
   return { ...data, ...updates, id: decoded.uid };
+}
+
+async function attachPendingPeerRequests(userId, normalizedEmail) {
+  if (!userId || !normalizedEmail) return;
+  const pendingSnap = await db
+    .collection("peerRequests")
+    .where("recipientEmail", "==", normalizedEmail)
+    .get();
+  if (pendingSnap.empty) return;
+  const now = new Date().toISOString();
+  const batch = db.batch();
+  pendingSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    if (data.status && data.status !== "pending") return;
+    if (data.recipientId === userId) return;
+    batch.update(doc.ref, { recipientId: userId, updatedAt: now });
+  });
+  await batch.commit();
 }
 
 async function requireAuth(req, res, next) {
@@ -404,10 +424,18 @@ app.get("/api/social/peers", requireAuth, async (req, res) => {
 
   const outgoingRequests = [];
   for (const doc of outgoingSnap.docs) {
-    const recipient = await db.collection("users").doc(doc.data().recipientId).get();
+    const recipientId = doc.data().recipientId;
+    let recipientName = "";
+    if (recipientId) {
+      const recipient = await db.collection("users").doc(recipientId).get();
+      recipientName = recipient.data()?.displayName || "";
+    }
+    if (!recipientName) {
+      recipientName = doc.data().recipientEmail || "";
+    }
     outgoingRequests.push({
       id: doc.id,
-      recipientName: recipient.data()?.displayName || ""
+      recipientName
     });
   }
 
@@ -420,17 +448,42 @@ app.post("/api/social/requests", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "Email required" });
   }
 
+  const normalizedEmail = email.toLowerCase();
+  if (normalizedEmail === req.user.email) {
+    return res.status(400).json({ error: "Cannot add yourself" });
+  }
+
   const recipientSnap = await db
     .collection("users")
-    .where("email", "==", email.toLowerCase())
+    .where("email", "==", normalizedEmail)
     .limit(1)
     .get();
 
   if (recipientSnap.empty) {
+    const existingInvite = await db
+      .collection("peerRequests")
+      .where("requesterId", "==", req.userId)
+      .where("recipientEmail", "==", normalizedEmail)
+      .limit(1)
+      .get();
+    if (!existingInvite.empty) {
+      return res.status(409).json({ error: "Already requested" });
+    }
+
+    const requestId = nanoid();
+    const now = new Date().toISOString();
+    await db.collection("peerRequests").doc(requestId).set({
+      requesterId: req.userId,
+      recipientEmail: normalizedEmail,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now
+    });
+
     const roleModel = await getCurrentRoleModel(req.user);
     try {
       const invite = await sendInviteEmail({
-        to: email,
+        to: normalizedEmail,
         inviterName: req.user.displayName || req.user.email,
         roleModelName: roleModel?.name || "a role model"
       });
@@ -466,11 +519,28 @@ app.post("/api/social/requests", requireAuth, async (req, res) => {
     return res.status(409).json({ error: "Already requested" });
   }
 
+  const existingInviteByEmail = await db
+    .collection("peerRequests")
+    .where("requesterId", "==", req.userId)
+    .where("recipientEmail", "==", normalizedEmail)
+    .limit(1)
+    .get();
+
+  if (!existingInviteByEmail.empty) {
+    const now = new Date().toISOString();
+    await db.collection("peerRequests").doc(existingInviteByEmail.docs[0].id).update({
+      recipientId,
+      updatedAt: now
+    });
+    return res.json({ status: "sent" });
+  }
+
   const requestId = nanoid();
   const now = new Date().toISOString();
   await db.collection("peerRequests").doc(requestId).set({
     requesterId: req.userId,
     recipientId,
+    recipientEmail: normalizedEmail,
     status: "pending",
     createdAt: now,
     updatedAt: now
