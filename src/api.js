@@ -1,6 +1,6 @@
 import { auth, signOutUser } from "./firebase.js";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://us-central1-role-model-digest-2026.cloudfunctions.net";
+const API_BASE = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : "https://us-central1-role-model-digest-2026.cloudfunctions.net";
 console.log('API_BASE:', API_BASE, 'timestamp:', Date.now());
 
 export async function apiRequest(path, options = {}) {
