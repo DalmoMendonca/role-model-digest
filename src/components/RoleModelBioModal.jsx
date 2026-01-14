@@ -76,34 +76,16 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
           <div className="card">
             <p className="muted">{error}</p>
           </div>
-        ) : roleModel ? (
+        ) : bio ? (
           <div>
-            <div className="role-model-hero">
-              {roleModel.imageUrl && (
-                <img 
-                  src={roleModel.imageUrl} 
-                  alt={`${roleModel.name} portrait`}
-                  referrerPolicy="no-referrer"
-                />
-              )}
-              <div className="role-model-hero-info">
-                <h3>{roleModel.name}</h3>
-                <p>Role model since {formatDateTime(roleModel.createdAt)}</p>
-              </div>
-            </div>
-
             <div className="card">
               <div className="card-header">
                 <h4>Bio</h4>
               </div>
               
-              {bio ? (
-                <div className="bio-text">
-                  <p>{bio}</p>
-                </div>
-              ) : (
-                <p className="muted">No bio available for this role model.</p>
-              )}
+              <div className="bio-text">
+                <p>{bio}</p>
+              </div>
               
               {/* Debug info */}
               <div style={{ marginTop: "20px", padding: "10px", background: "#f0f0f0", fontSize: "12px" }}>
@@ -111,7 +93,11 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
               </div>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="card">
+            <p className="muted">No bio available for this role model.</p>
+          </div>
+        )}
       </div>
     </div>
   );
