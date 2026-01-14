@@ -896,7 +896,7 @@ app.post("/api/admin/requests/:id/decline", requireAuth, async (req, res) => {
   return res.json(result.payload);
 });
 
-app.get("/api/social/peers", requireAuth, async (req, res) => {
+app.get("/social/peers", requireAuth, async (req, res) => {
   const peerRows = await db
     .collection("peers")
     .where("userId", "==", req.userId)
@@ -967,7 +967,7 @@ app.get("/api/social/peers", requireAuth, async (req, res) => {
   res.json({ peers, incomingRequests, outgoingRequests });
 });
 
-app.get("/api/social/users", requireAuth, async (req, res) => {
+app.get("/social/users", requireAuth, async (req, res) => {
   const query = (req.query.q || "").toString().toLowerCase().trim();
   const [
     userSnap,
@@ -1225,7 +1225,7 @@ app.post("/api/social/requests/:id/decline", requireAuth, async (req, res) => {
   return res.json(result.payload);
 });
 
-app.get("/api/social/timeline", requireAuth, async (req, res) => {
+app.get("/social/timeline", requireAuth, async (req, res) => {
   const query = (req.query.q || "").toString().toLowerCase().trim();
   const peerRows = await db
     .collection("peers")
@@ -1323,7 +1323,7 @@ app.get("/api/social/timeline", requireAuth, async (req, res) => {
   res.json({ entries: entriesWithThreads });
 });
 
-app.get("/api/social/digests/:digestId/thread", requireAuth, async (req, res) => {
+app.get("/social/digests/:digestId/thread", requireAuth, async (req, res) => {
   const { digestId } = req.params;
   const [reactions, comments] = await Promise.all([
     getReactionSummary(digestId, req.userId),
