@@ -175,6 +175,49 @@ a {
   gap: 12px;
 }
 
+.nav-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-profile .user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-profile .user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px rgba(17, 20, 24, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.nav-profile .user-name {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.nav-profile .logout-button {
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid rgba(17, 20, 24, 0.2);
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-profile .logout-button:hover {
+  background: rgba(17, 20, 24, 0.08);
+}
+
 .page {
   display: flex;
   flex-direction: column;
@@ -1710,6 +1753,12 @@ input:focus {
   line-height: 1;
 }
 
+.notifications-dropdown {
+  position: relative;
+  display: inline-block;
+  z-index: 1001;
+}
+
 .notifications-panel {
   position: fixed;
   top: 60px;
@@ -1884,6 +1933,23 @@ input:focus {
   .role-model-hero {
     flex-direction: column;
     text-align: center;
+  }
+
+  /* On mobile, keep reaction tray static but visible when open */
+  .reaction-tray {
+    position: static;
+    margin-top: 10px;
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+    border-radius: 16px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    display: none;
+  }
+
+  .reaction-control.open .reaction-tray {
+    display: flex;
   }
 }
 
