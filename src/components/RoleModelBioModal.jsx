@@ -19,7 +19,7 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
         const { db } = await import("../firebase.js");
         
         // Get role model data
-        const roleModelDoc = await getDoc(doc(db, "roleModels", roleModelId));
+        const roleModelDoc = await doc(db, "roleModels", roleModelId).get();
         if (!roleModelDoc.exists()) {
           setError("Role model not found");
           return;
