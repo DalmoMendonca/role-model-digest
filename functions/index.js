@@ -1505,33 +1505,38 @@ app.get("/api/social/role-models/:id", async (req, res) => {
     return res.status(400).json({ error: "Role model ID required" });
   }
 
-  const roleDoc = await db.collection("roleModels").doc(id).get();
-  console.log("Role model doc exists:", roleDoc.exists);
-  
-  if (!roleDoc.exists) {
-    return res.status(404).json({ error: "Role model not found" });
+  try {
+    const roleDoc = await db.collection("roleModels").doc(id).get();
+    console.log("Role model doc exists:", roleDoc.exists);
+    
+    if (!roleDoc.exists) {
+      return res.status(404).json({ error: "Role model not found" });
+    }
+
+    const roleModel = { id: roleDoc.id, ...roleDoc.data() };
+    console.log("Role model data:", { id: roleModel.id, name: roleModel.name });
+    
+    // Get bio for this role model
+    const bioSnap = await db
+      .collection("bios")
+      .where("roleModelId", "==", id)
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+
+    let bio = null;
+    if (!bioSnap.empty) {
+      bio = { id: bioSnap.docs[0].id, ...bioSnap.docs[0].data() };
+      console.log("Bio found:", bio.id);
+    } else {
+      console.log("No bio found for role model");
+    }
+
+    res.json({ roleModel, bio });
+  } catch (error) {
+    console.error("Error fetching role model:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  const roleModel = { id: roleDoc.id, ...roleDoc.data() };
-  console.log("Role model data:", { id: roleModel.id, name: roleModel.name });
-  
-  // Get bio for this role model
-  const bioSnap = await db
-    .collection("bios")
-    .where("roleModelId", "==", id)
-    .orderBy("createdAt", "desc")
-    .limit(1)
-    .get();
-
-  let bio = null;
-  if (!bioSnap.empty) {
-    bio = { id: bioSnap.docs[0].id, ...bioSnap.docs[0].data() };
-    console.log("Bio found:", bio.id);
-  } else {
-    console.log("No bio found for role model");
-  }
-
-  res.json({ roleModel, bio });
 });
 
 app.post("/api/notifications/read-all", requireAuth, async (req, res) => {

@@ -98,6 +98,10 @@ export function getPeers() {
   return apiRequest("/api/social/peers");
 }
 
+export function getRoleModel() {
+  return apiRequest("/api/role-model");
+}
+
 export function sendPeerRequest(payload) {
   return apiRequest("/api/social/requests", {
     method: "POST",

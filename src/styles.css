@@ -188,12 +188,12 @@ a {
 }
 
 .nav-profile .user-avatar {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 8px 18px rgba(17, 20, 24, 0.12);
+  box-shadow: 0 4px 12px rgba(17, 20, 24, 0.12);
   background: rgba(255, 255, 255, 0.9);
 }
 
@@ -1950,6 +1950,71 @@ input:focus {
 
   .reaction-control.open .reaction-tray {
     display: flex;
+  }
+}
+
+/* Floating Notification Bell */
+.floating-notification-bell {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.bell-button {
+  position: relative;
+  background: rgba(17, 20, 24, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--ink);
+  font-size: 1.2rem;
+  backdrop-filter: blur(18px);
+}
+
+.bell-button:hover {
+  background: rgba(31, 191, 154, 0.2);
+  border-color: rgba(31, 191, 154, 0.4);
+  transform: scale(1.05);
+}
+
+.bell-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 999px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1;
+}
+
+@media (max-width: 768px) {
+  .floating-notification-bell {
+    bottom: 16px;
+    right: 16px;
+  }
+  
+  .bell-button {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+  
+  .bell-badge {
+    font-size: 0.65rem;
+    padding: 1px 4px;
+    min-width: 14px;
   }
 }
 

@@ -217,7 +217,7 @@ export default function SocialPage() {
           entry.digestId === digestId ? { ...entry, reactions: data } : entry
         )
       );
-      // Don't close the reaction tray after reacting - keep it open for UX
+      setOpenReactionFor(digestId);
     } catch (error) {
       setStatus(error.message);
     }

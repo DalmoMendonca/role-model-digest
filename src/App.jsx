@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { getMe, getRoleModelImage, logout } from "./api.js";
-import { onAuthChange } from "./firebase.js";
+import { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { auth } from "./firebase.js";
+import { getRoleModel } from "./api.js";
 import AuthScreen from "./components/AuthScreen.jsx";
-import Nav from "./components/Nav.jsx";
-import RoleModelSetup from "./components/RoleModelSetup.jsx";
-import AdminPage from "./pages/AdminPage.jsx";
+import RoleModelSetup from "./pages/RoleModelSetup.jsx";
 import BioPage from "./pages/BioPage.jsx";
 import DigestPage from "./pages/DigestPage.jsx";
-import NotificationsPage from "./pages/NotificationsPage.jsx";
-import NotFoundPage from "./pages/NotFoundPage.jsx";
-import PublicDigestPage from "./pages/PublicDigestPage.jsx";
 import SocialPage from "./pages/SocialPage.jsx";
 import SocialRoleModelPage from "./pages/SocialRoleModelPage.jsx";
+import NotificationsPage from "./pages/NotificationsPage.jsx";
+import AdminPage from "./pages/AdminPage.jsx";
+import PublicDigestPage from "./pages/PublicDigestPage.jsx";
+import NotFoundPage from "./pages/NotFoundPage.jsx";
+import Nav from "./components/Nav.jsx";
+import FloatingNotificationBell from "./components/FloatingNotificationBell.jsx";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -191,6 +192,9 @@ export default function App() {
         <Route path="/digest/share/:digestId" element={<PublicDigestPage />} />
         <Route path="/*" element={protectedContent} />
       </Routes>
+      
+      {/* Floating notification bell */}
+      <FloatingNotificationBell />
     </BrowserRouter>
   );
 }
