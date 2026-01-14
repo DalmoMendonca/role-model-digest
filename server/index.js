@@ -571,6 +571,37 @@ app.post("/api/social/requests/:id/decline", authRequired, (req, res) => {
   res.json({ status: "declined" });
 });
 
+app.get("/api/social/role-models/:id", authRequired, (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    return res.status(400).json({ error: "Role model ID required" });
+  }
+
+  let roleModel = db.prepare("SELECT * FROM role_models WHERE id = ?").get(id);
+  if (!roleModel) {
+    const user = db
+      .prepare("SELECT current_role_model_id FROM users WHERE id = ?")
+      .get(id);
+    if (user?.current_role_model_id) {
+      roleModel = db
+        .prepare("SELECT * FROM role_models WHERE id = ?")
+        .get(user.current_role_model_id);
+    }
+  }
+
+  if (!roleModel) {
+    return res.status(404).json({ error: "Role model not found" });
+  }
+
+  const mapped = mapRoleModel(roleModel);
+  const updatedAt = mapped.bioUpdatedAt || null;
+  const bio = mapped.bioText
+    ? { bioText: mapped.bioText, createdAt: updatedAt, updatedAt }
+    : null;
+
+  res.json({ roleModel: mapped, bio });
+});
+
 app.get("/api/social/timeline", authRequired, (req, res) => {
   const query = (req.query.q || "").toString().toLowerCase();
 

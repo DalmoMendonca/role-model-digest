@@ -1490,27 +1490,31 @@ app.get("/api/notifications", requireAuth, async (req, res) => {
 
 app.get("/api/social/role-models/:id", async (req, res) => {
   const { id } = req.params;
-  console.log("Role model bio request for ID:", id);
-  
+
   if (!id) {
     return res.status(400).json({ error: "Role model ID required" });
   }
 
   try {
-    const roleDoc = await db.collection("roleModels").doc(id).get();
-    console.log("Role model doc exists:", roleDoc.exists);
-    
+    let roleDoc = await db.collection("roleModels").doc(id).get();
+
+    if (!roleDoc.exists) {
+      const userDoc = await db.collection("users").doc(id).get();
+      const roleModelId = userDoc.exists ? userDoc.data()?.currentRoleModelId : null;
+      if (roleModelId) {
+        roleDoc = await db.collection("roleModels").doc(roleModelId).get();
+      }
+    }
+
     if (!roleDoc.exists) {
       return res.status(404).json({ error: "Role model not found" });
     }
 
-    const roleModel = { id: roleDoc.id, ...roleDoc.data() };
-    console.log("Role model data:", { id: roleModel.id, name: roleModel.name });
-    
-    // Get bio for this role model
+    const roleModel = mapRoleModel(roleDoc);
+
     const bioSnap = await db
       .collection("bios")
-      .where("roleModelId", "==", id)
+      .where("roleModelId", "==", roleDoc.id)
       .orderBy("createdAt", "desc")
       .limit(1)
       .get();
@@ -1518,9 +1522,13 @@ app.get("/api/social/role-models/:id", async (req, res) => {
     let bio = null;
     if (!bioSnap.empty) {
       bio = { id: bioSnap.docs[0].id, ...bioSnap.docs[0].data() };
-      console.log("Bio found:", bio.id);
-    } else {
-      console.log("No bio found for role model");
+    } else if (roleModel?.bioText) {
+      const updatedAt = roleModel.bioUpdatedAt || null;
+      bio = {
+        bioText: roleModel.bioText,
+        createdAt: updatedAt,
+        updatedAt
+      };
     }
 
     res.json({ roleModel, bio });
