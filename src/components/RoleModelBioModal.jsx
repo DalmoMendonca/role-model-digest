@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getBio } from "../api.js";
+import { getSocialRoleModel } from "../api.js";
 
 export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
   const [roleModel, setRoleModel] = useState(null);
@@ -10,27 +10,28 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
   useEffect(() => {
     if (!isOpen || !roleModelId) return;
 
+    console.log("Modal opening with roleModelId:", roleModelId);
+
     const loadBio = async () => {
       setLoading(true);
       setError(null);
       
       try {
-        // Use API call instead of direct Firestore approach
-        const bioData = await getBio(roleModelId);
-        console.log("getBio response:", bioData);
-        if (!bioData) {
+        // Use the correct API call for getting a specific role model's bio
+        console.log("Loading role model with ID:", roleModelId);
+        const data = await getSocialRoleModel(roleModelId);
+        console.log("Role model data received:", data);
+        
+        if (!data) {
           setError("Failed to load bio information");
           return;
         }
         
-        const bioText = bioData.bioText || "";
-        console.log("Setting bio text:", bioText);
-        setBio(bioText);
+        console.log("Setting roleModel:", data.roleModel);
+        console.log("Setting bio:", data.bio);
         
-        // Get role model data from bio response
-        if (bioData.roleModel) {
-          setRoleModel(bioData.roleModel);
-        }
+        setRoleModel(data.roleModel);
+        setBio(data.bio);
       } catch (err) {
         console.error("Failed to load bio:", err);
         setError("Failed to load bio information");
@@ -63,7 +64,21 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Role Model Bio</h2>
+          <div className="modal-header-info">
+            {roleModel?.imageUrl ? (
+              <img 
+                src={roleModel.imageUrl} 
+                alt={`${roleModel.name} portrait`}
+                className="modal-header-avatar"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="modal-header-avatar">
+                {roleModel?.name?.charAt(0) || "R"}
+              </div>
+            )}
+            <h3 className="modal-header-name">{roleModel?.name || "Role Model"}</h3>
+          </div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         
@@ -84,12 +99,7 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
               </div>
               
               <div className="bio-text">
-                <p>{bio}</p>
-              </div>
-              
-              {/* Debug info */}
-              <div style={{ marginTop: "20px", padding: "10px", background: "#f0f0f0", fontSize: "12px" }}>
-                <strong>Debug:</strong> bio length = {bio ? bio.length : 0}, roleModel = {roleModel ? 'exists' : 'null'}
+                <p>{bio?.bioText || bio || "No bio text available"}</p>
               </div>
             </div>
           </div>
