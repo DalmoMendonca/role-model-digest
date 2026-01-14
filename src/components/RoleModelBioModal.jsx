@@ -17,6 +17,7 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
       try {
         // Use API call instead of direct Firestore approach
         const bioData = await getBio(roleModelId);
+        console.log("getBio response:", bioData);
         if (!bioData) {
           setError("Failed to load bio information");
           return;
