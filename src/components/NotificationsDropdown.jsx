@@ -164,38 +164,29 @@ export default function NotificationsDropdown({ user, onUserUpdate }) {
                 <span className="toggle-track" aria-hidden="true">
                   <span className="toggle-thumb" />
                 </span>
-                <span className="toggle-label">Zen</span>
+                <span className="toggle-state">{user?.zenMode ? "On" : "Off"}</span>
+                <span className="toggle-label">Zen mode</span>
               </label>
-              {unreadCount > 0 && (
-                <button
-                  className="ghost"
-                  type="button"
-                  onClick={handleMarkAllRead}
-                  disabled={saving}
-                >
-                  Mark all read
-                </button>
-              )}
+              <button className="secondary" type="button" onClick={handleMarkAllRead} disabled={saving}>
+                Mark all read
+              </button>
             </div>
           </div>
 
           <div className="notifications-content">
             {loading ? (
-              <p className="muted">Loading...</p>
+              <p className="muted">Loading notifications...</p>
             ) : sortedNotifications.length ? (
               sortedNotifications.map((notification) => {
                 const label = getNotificationLabel(notification);
                 const isUnread = !notification.readAt;
                 const message = notification.message || "";
                 return (
-                  <div
-                    key={notification.id}
-                    className={`notification-item ${isUnread ? "unread" : ""}`}
-                  >
+                  <div key={notification.id} className={`notification-item ${isUnread ? "unread" : ""}`}>
                     <div className="notification-content">
                       <p className="notification-title">
                         {label}
-                        {isUnread && <span className="notification-dot" />}
+                        {isUnread ? <span className="notification-dot" aria-hidden="true" /> : null}
                       </p>
                       <p className="notification-time">
                         {formatDateTime(notification.createdAt)}
@@ -205,29 +196,28 @@ export default function NotificationsDropdown({ user, onUserUpdate }) {
                         <Link
                           className="notification-link"
                           to="/social"
-                          onClick={() => {
-                            handleMarkRead(notification.id);
-                            setIsOpen(false);
-                          }}
+                          onClick={() => handleMarkRead(notification.id)}
                         >
                           View in Social
                         </Link>
                       ) : null}
                     </div>
-                    {isUnread && (
+                    {isUnread ? (
                       <button
                         className="ghost"
                         type="button"
                         onClick={() => handleMarkRead(notification.id)}
                       >
-                        <i className="fa fa-check" />
+                        Mark read
                       </button>
+                    ) : (
+                      <span className="muted">Read</span>
                     )}
                   </div>
                 );
               })
             ) : (
-              <p className="muted">No notifications yet</p>
+              <p className="muted">No notifications yet.</p>
             )}
           </div>
         </div>

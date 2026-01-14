@@ -37,7 +37,7 @@ export async function apiRequest(path, options = {}) {
 }
 
 export function getMe() {
-  return apiRequest("/api/me");
+  return apiRequest("/me");
 }
 
 export function logout() {
@@ -45,68 +45,72 @@ export function logout() {
 }
 
 export function setRoleModel(payload) {
-  return apiRequest("/api/role-model", {
+  return apiRequest("/role-model", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
 export function updateRoleModel(payload) {
-  return apiRequest("/api/role-model", {
+  return apiRequest("/role-model", {
     method: "PATCH",
     body: JSON.stringify(payload)
   });
 }
 
 export function regenerateBio() {
-  return apiRequest("/api/role-model/bio", {
+  return apiRequest("/role-model/bio", {
     method: "POST"
   });
 }
 
 export function getBio() {
-  return apiRequest("/api/bio");
+  return apiRequest("/bio");
 }
 
 export function getRoleModelImage(options = {}) {
   const query = options.refresh ? "?refresh=1" : "";
-  return apiRequest(`/api/role-model/image${query}`);
+  return apiRequest(`/role-model/image${query}`);
 }
 
 export function getDigests() {
-  return apiRequest("/api/digests");
+  return apiRequest("/digests");
 }
 
 export function getPublicDigest(digestId) {
-  return apiRequest(`/api/digests/share/${digestId}`);
+  return apiRequest(`/digests/share/${digestId}`);
 }
 
 export function runDigest() {
-  return apiRequest("/api/digests/run", {
+  return apiRequest("/digests/run", {
     method: "POST"
   });
 }
 
 export function updatePreferences(payload) {
-  return apiRequest("/api/preferences", {
+  return apiRequest("/preferences", {
     method: "PATCH",
     body: JSON.stringify(payload)
   });
 }
 
 export function getPeers() {
-  return apiRequest("/api/social/peers");
+  return apiRequest("/social/peers");
+}
+
+export function getRoleModel() {
+  return apiRequest("/role-model");
 }
 
 export function sendPeerRequest(payload) {
-  return apiRequest("/api/social/requests", {
+  return apiRequest("/social/requests", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
 export function respondToRequest(requestId, action) {
-  return apiRequest(`/api/social/requests/${requestId}/${action}`,
+  return apiRequest(`/social/requests/${requestId}/${action}`,
     {
       method: "POST"
     }
@@ -115,59 +119,59 @@ export function respondToRequest(requestId, action) {
 
 export function getTimeline(query) {
   const queryString = query ? `?q=${encodeURIComponent(query)}` : "";
-  return apiRequest(`/api/social/timeline${queryString}`);
+  return apiRequest(`/social/timeline${queryString}`);
 }
 
 export function getSocialUsers(query) {
   const queryString = query ? `?q=${encodeURIComponent(query)}` : "";
-  return apiRequest(`/api/social/users${queryString}`);
+  return apiRequest(`/social/users${queryString}`);
 }
 
 export function getAdminOverview() {
-  return apiRequest("/api/admin/overview");
+  return apiRequest("/admin/overview");
 }
 
 export function adminRespondPeerRequest(requestId, action) {
-  return apiRequest(`/api/admin/requests/${requestId}/${action}`, {
+  return apiRequest(`/admin/requests/${requestId}/${action}`, {
     method: "POST"
   });
 }
 
 export function addDigestReaction(digestId, type) {
-  return apiRequest(`/api/social/digests/${digestId}/reactions`, {
+  return apiRequest(`/social/digests/${digestId}/reactions`, {
     method: "POST",
     body: JSON.stringify({ type })
   });
 }
 
 export function addDigestComment(digestId, payload) {
-  return apiRequest(`/api/social/digests/${digestId}/comments`, {
+  return apiRequest(`/social/digests/${digestId}/comments`, {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
 export function getDigestThread(digestId) {
-  return apiRequest(`/api/social/digests/${digestId}/thread`);
+  return apiRequest(`/social/digests/${digestId}/thread`);
 }
 
 export function getNotifications(limit) {
   const query = limit ? `?limit=${encodeURIComponent(limit)}` : "";
-  return apiRequest(`/api/notifications${query}`);
+  return apiRequest(`/notifications${query}`);
 }
 
 export function getUnreadNotificationCount() {
-  return apiRequest("/api/notifications/unread-count");
+  return apiRequest("/notifications/unread-count");
 }
 
 export function markAllNotificationsRead() {
-  return apiRequest("/api/notifications/read-all", { method: "POST" });
+  return apiRequest("/notifications/read-all", { method: "POST" });
 }
 
 export function markNotificationRead(notificationId) {
-  return apiRequest(`/api/notifications/${notificationId}/read`, { method: "POST" });
+  return apiRequest(`/notifications/${notificationId}/read`, { method: "POST" });
 }
 
 export function getSocialRoleModel(roleModelId) {
-  return apiRequest(`/api/social/role-models/${roleModelId}`);
+  return apiRequest(`/social/role-models/${roleModelId}`);
 }

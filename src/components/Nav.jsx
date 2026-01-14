@@ -1,36 +1,12 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { getUnreadNotificationCount } from "../api.js";
-import NotificationsDropdown from "./NotificationsDropdown.jsx";
 
 export default function Nav({ user, roleModel, onLogout, onImageRefresh, onUserUpdate, isAdmin }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     setImageFailed(false);
   }, [roleModel?.id, roleModel?.imageUrl]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const load = async () => {
-      try {
-        const data = await getUnreadNotificationCount();
-        if (!isMounted) return;
-        setUnreadCount(data?.unreadCount || 0);
-      } catch (error) {
-        if (!isMounted) return;
-        setUnreadCount(0);
-      }
-    };
-
-    load();
-    const interval = setInterval(load, 25000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   return (
     <nav className="nav">
@@ -55,7 +31,6 @@ export default function Nav({ user, roleModel, onLogout, onImageRefresh, onUserU
           <i className="fa fa-users" />
           <span className="nav-label">Social</span>
         </NavLink>
-        <NotificationsDropdown user={user} onUserUpdate={onUserUpdate} />
         {isAdmin ? (
           <NavLink to="/admin">
             <i className="fa fa-cog" />

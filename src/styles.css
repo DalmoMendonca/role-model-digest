@@ -187,13 +187,13 @@ a {
   gap: 12px;
 }
 
-.nav-profile .user-avatar {
-  width: 48px;
-  height: 48px;
+.nav-profile .user-info .user-avatar {
+  width: 36px !important;
+  height: 36px !important;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 8px 18px rgba(17, 20, 24, 0.12);
+  box-shadow: 0 4px 12px rgba(17, 20, 24, 0.12);
   background: rgba(255, 255, 255, 0.9);
 }
 
@@ -925,6 +925,7 @@ input:focus {
 
 .reaction-control {
   position: relative;
+  padding: 4px 0;
 }
 
 .reaction-trigger {
@@ -956,7 +957,7 @@ input:focus {
 .reaction-tray {
   position: absolute;
   left: 0;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 4px);
   display: flex;
   gap: 6px;
   padding: 8px 10px;
@@ -972,7 +973,8 @@ input:focus {
 }
 
 .reaction-control:hover .reaction-tray,
-.reaction-control:focus-within .reaction-tray {
+.reaction-control:focus-within .reaction-tray,
+.reaction-tray:hover {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -1950,6 +1952,75 @@ input:focus {
 
   .reaction-control.open .reaction-tray {
     display: flex;
+  }
+}
+
+/* Floating Notification Bell */
+.floating-notification-bell {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+}
+
+.bell-button {
+  position: relative;
+  background: rgba(17, 20, 24, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: white;
+  font-size: 1.3rem;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(17, 20, 24, 0.3);
+}
+
+.bell-button:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.1);
+  box-shadow: 0 12px 40px rgba(255, 107, 45, 0.4);
+}
+
+.bell-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: var(--accent-2);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+  line-height: 1;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 768px) {
+  .floating-notification-bell {
+    bottom: 16px;
+    right: 16px;
+  }
+  
+  .bell-button {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+  
+  .bell-badge {
+    font-size: 0.65rem;
+    padding: 1px 4px;
+    min-width: 14px;
   }
 }
 
