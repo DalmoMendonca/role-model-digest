@@ -1,6 +1,6 @@
 import { auth, signOutUser } from "./firebase.js";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://us-central1-role-model-digest-2026.cloudfunctions.net/api";
+const API_BASE = import.meta.env.VITE_API_URL || "https://us-central1-role-model-digest-2026.cloudfunctions.net";
 
 export async function apiRequest(path, options = {}) {
   const headers = {
@@ -95,7 +95,7 @@ export function updatePreferences(payload) {
 }
 
 export function getPeers() {
-  return apiRequest("/social/peers");
+  return apiRequest("/api/social/peers");
 }
 
 export function getRoleModel() {
@@ -103,14 +103,14 @@ export function getRoleModel() {
 }
 
 export function sendPeerRequest(payload) {
-  return apiRequest("/social/requests", {
+  return apiRequest("/api/social/requests", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
 export function respondToRequest(requestId, action) {
-  return apiRequest(`/social/requests/${requestId}/${action}`,
+  return apiRequest(`/api/social/requests/${requestId}/${action}`,
     {
       method: "POST"
     }
@@ -119,12 +119,12 @@ export function respondToRequest(requestId, action) {
 
 export function getTimeline(query) {
   const queryString = query ? `?q=${encodeURIComponent(query)}` : "";
-  return apiRequest(`/social/timeline${queryString}`);
+  return apiRequest(`/api/social/timeline${queryString}`);
 }
 
 export function getSocialUsers(query) {
   const queryString = query ? `?q=${encodeURIComponent(query)}` : "";
-  return apiRequest(`/social/users${queryString}`);
+  return apiRequest(`/api/social/users${queryString}`);
 }
 
 export function getAdminOverview() {
@@ -138,21 +138,21 @@ export function adminRespondPeerRequest(requestId, action) {
 }
 
 export function addDigestReaction(digestId, type) {
-  return apiRequest(`/social/digests/${digestId}/reactions`, {
+  return apiRequest(`/api/social/digests/${digestId}/reactions`, {
     method: "POST",
     body: JSON.stringify({ type })
   });
 }
 
 export function addDigestComment(digestId, payload) {
-  return apiRequest(`/social/digests/${digestId}/comments`, {
+  return apiRequest(`/api/social/digests/${digestId}/comments`, {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
 export function getDigestThread(digestId) {
-  return apiRequest(`/social/digests/${digestId}/thread`);
+  return apiRequest(`/api/social/digests/${digestId}/thread`);
 }
 
 export function getNotifications(limit) {
@@ -173,5 +173,5 @@ export function markNotificationRead(notificationId) {
 }
 
 export function getSocialRoleModel(roleModelId) {
-  return apiRequest(`/social/role-models/${roleModelId}`);
+  return apiRequest(`/api/social/role-models/${roleModelId}`);
 }
