@@ -490,32 +490,6 @@ export default function SocialPage() {
                 <p className="peer-name">{user.displayName || "Unnamed"}</p>
                 <p className="muted">{user.roleModelName || "No role model yet"}</p>
               </div>
-              {user.roleModelId ? (
-                <button 
-                  className="role-avatar-link" 
-                  onClick={() => handleOpenBioModal(user.roleModelId)}
-                >
-                  {user.roleModelImageUrl ? (
-                    <img
-                      className="role-avatar-inline"
-                      src={user.roleModelImageUrl}
-                      alt={user.roleModelName || "Role model"}
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="role-avatar-inline avatar-fallback">RM</span>
-                  )}
-                </button>
-              ) : user.roleModelImageUrl ? (
-                <img
-                  className="role-avatar-inline"
-                  src={user.roleModelImageUrl}
-                  alt={user.roleModelName || "Role model"}
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="role-avatar-inline avatar-fallback">RM</span>
-              )}
               <div className="discover-actions">
                 {user.relation === "connected" ? (
                   <span className="muted">Connected</span>
