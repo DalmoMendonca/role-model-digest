@@ -1,6 +1,7 @@
 import { auth, signOutUser } from "./firebase.js";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
+const API_BASE_WITH_API = API_BASE.endsWith('/api') ? API_BASE : `${API_BASE}/api`;
 
 export async function apiRequest(path, options = {}) {
   const headers = {
@@ -12,13 +13,7 @@ export async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  // Handle API path to avoid double /api
-  let fullPath = path;
-  if (API_BASE && API_BASE.endsWith('/api') && path.startsWith('/api')) {
-    fullPath = path.substring(4); // Remove /api from path
-  }
-  
-  const response = await fetch(`${API_BASE}${fullPath}`, {
+  const response = await fetch(`${API_BASE_WITH_API}${path}`, {
     headers,
     ...options
   });
