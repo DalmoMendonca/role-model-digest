@@ -468,52 +468,57 @@ export default function SocialPage() {
         </div>
       </section>
 
-      <section className="card social-card">
-        <div className="card-header">
-          <div>
-            <h3>Find peers</h3>
-            <p className="muted">Search everyone on Role Model Digest.</p>
-          </div>
-          <input
-            className="filter-input"
-            type="text"
-            value={discoverQuery}
-            onChange={(event) => handleDiscoverSearch(event.target.value)}
-            placeholder="Search by name"
-          />
-        </div>
-        <div className="discover-list">
-          {discoverUsers.map((user) => (
-            <div key={user.id} className="discover-row">
-              <Avatar className="avatar" url={user.photoURL} name={user.displayName} />
-              <div className="discover-meta">
-                <p className="peer-name">{user.displayName || "Unnamed"}</p>
-                <p className="muted">{user.roleModelName || "No role model yet"}</p>
+      {/* Don't render discover users until data is loaded */}
+      {!loading && (
+        <>
+          <section className="card social-card">
+            <div className="card-header">
+              <div>
+                <h3>Find peers</h3>
+                <p className="muted">Search everyone on Role Model Digest.</p>
               </div>
-              <div className="discover-actions">
-                {user.relation === "connected" ? (
-                  <span className="muted">Connected</span>
-                ) : user.relation === "outgoing" ? (
-                  <span className="muted">Request sent</span>
-                ) : user.relation === "incoming" ? (
-                  <span className="muted">Requested you</span>
-                ) : (
-                  <button
-                    className="secondary"
-                    type="button"
-                    onClick={() => handleAddUser(user.id)}
-                  >
-                    Add
-                  </button>
-                )}
-              </div>
+              <input
+                className="filter-input"
+                type="text"
+                value={discoverQuery}
+                onChange={(event) => handleDiscoverSearch(event.target.value)}
+                placeholder="Search by name"
+              />
             </div>
-          ))}
-          {discoverUsers.length === 0 ? (
-            <p className="muted">No users found.</p>
-          ) : null}
-        </div>
-      </section>
+            <div className="discover-list">
+              {discoverUsers.map((user) => (
+                <div key={user.id} className="discover-row">
+                  <Avatar className="avatar" url={user.photoURL} name={user.displayName} />
+                  <div className="discover-meta">
+                    <p className="peer-name">{user.displayName || "Unnamed"}</p>
+                    <p className="muted">{user.roleModelName || "No role model yet"}</p>
+                  </div>
+                  <div className="discover-actions">
+                    {user.relation === "connected" ? (
+                      <span className="muted">Connected</span>
+                    ) : user.relation === "outgoing" ? (
+                      <span className="muted">Request sent</span>
+                    ) : user.relation === "incoming" ? (
+                      <span className="muted">Requested you</span>
+                    ) : (
+                      <button
+                        className="secondary"
+                        type="button"
+                        onClick={() => handleAddUser(user.id)}
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {discoverUsers.length === 0 ? (
+                <p className="muted">No users found.</p>
+              ) : null}
+            </div>
+          </section>
+        </>
+      )}
 
       <section className="card social-card">
         <div className="card-header">
