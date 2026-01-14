@@ -154,6 +154,9 @@ a {
   background: transparent;
   border: 1px solid transparent;
   transition: all 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .nav-label {
@@ -855,6 +858,7 @@ input:focus {
   grid-template-columns: auto 1fr auto;
   gap: 16px;
   align-items: center;
+  min-width: 0;
 }
 
 .timeline-avatars {
@@ -905,6 +909,7 @@ input:focus {
 .timeline-entry-meta {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .timeline-date {
@@ -917,11 +922,15 @@ input:focus {
   margin: 0;
   font-size: 1.05rem;
   line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .peer-name {
   margin: 0;
   font-weight: 600;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .timeline-details {
@@ -1006,6 +1015,8 @@ input:focus {
 
 .role-model-link {
   text-decoration: none;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .role-model-link:hover {
@@ -1179,6 +1190,8 @@ input:focus {
 
 .comment-text {
   margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .comment-reply {
@@ -1213,6 +1226,7 @@ input:focus {
 .discover-meta {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .discover-actions {
@@ -1622,30 +1636,20 @@ input:focus {
   .nav-links {
     grid-area: links;
     flex-direction: row;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
   }
 
   .nav-links a {
     padding: 8px 12px;
     font-size: 0.68rem;
     letter-spacing: 1px;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
   }
 
   .nav-links a.active,
   .nav-links a:hover {
     transform: none;
-  }
-
-  .nav-links::-webkit-scrollbar {
-    display: none;
-  }
-
-  .nav-links {
-    scrollbar-width: none;
   }
 
   .nav-profile {
@@ -1999,6 +2003,105 @@ input:focus {
     text-align: center;
   }
 
+  .page {
+    gap: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .page-header .inline-form {
+    width: 100%;
+  }
+
+  .page-header .inline-form button {
+    width: 100%;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .social-card {
+    gap: 12px;
+  }
+
+  .peer-grid,
+  .requests {
+    grid-template-columns: 1fr;
+  }
+
+  .peer-chip {
+    padding: 14px;
+  }
+
+  .discover-row {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .discover-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .discover-actions button {
+    width: 100%;
+  }
+
+  .timeline-entry {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .timeline-entry-header {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .timeline-avatars {
+    width: 56px;
+    height: 48px;
+  }
+
+  .avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .role-avatar {
+    width: 28px;
+    height: 28px;
+    right: 0;
+    bottom: -2px;
+    border-radius: 10px;
+  }
+
+  .timeline-date {
+    text-align: left;
+    font-size: 0.75rem;
+  }
+
+  .timeline-summary {
+    font-size: 0.95rem;
+  }
+
+  .timeline-details {
+    gap: 8px;
+  }
+
+  .filter-input {
+    width: 100%;
+  }
+
+  .comment-replies {
+    padding-left: 12px;
+  }
+
   /* On mobile, keep reaction tray static but visible when open */
   .reaction-tray {
     position: static;
@@ -2009,6 +2112,8 @@ input:focus {
     border-radius: 16px;
     flex-wrap: wrap;
     justify-content: flex-start;
+    width: 100%;
+    max-width: 100%;
     display: none;
   }
 
@@ -2275,6 +2380,9 @@ input:focus {
   font-size: inherit;
   padding: 0;
   transition: color 0.2s ease;
+  text-align: left;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .role-model-link:hover {

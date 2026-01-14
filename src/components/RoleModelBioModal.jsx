@@ -94,10 +94,6 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
         ) : bio ? (
           <div>
             <div className="card">
-              <div className="card-header">
-                <h4>Bio</h4>
-              </div>
-              
               <div className="bio-text">
                 <p>{bio?.bioText || bio || "No bio text available"}</p>
               </div>

@@ -465,29 +465,6 @@ export default function DigestPage({ user, roleModel, onUserUpdate }) {
           <p className="eyebrow">Digest</p>
           <h2>{roleModel?.name}</h2>
         </div>
-        <div className="header-actions">
-          <button
-            className="secondary"
-            type="button"
-            onClick={handleRunDigest}
-            disabled={running}
-          >
-            {running ? "Generating..." : "Generate now"}
-          </button>
-          {currentDigest ? (
-            <button className="secondary" type="button" onClick={handleShareDigest}>
-              Share
-            </button>
-          ) : null}
-          <label className="toggle-switch">
-            <input type="checkbox" checked={emailOptIn} onChange={handleToggleEmail} />
-            <span className="toggle-track" aria-hidden="true">
-              <span className="toggle-thumb" />
-            </span>
-            <span className="toggle-state">{emailOptIn ? "On" : "Off"}</span>
-            <span className="toggle-label">Weekly email</span>
-          </label>
-        </div>
       </header>
 
       {status ? <p className="status">{status}</p> : null}
@@ -593,6 +570,30 @@ export default function DigestPage({ user, roleModel, onUserUpdate }) {
           <p className="muted">No digest yet. Generate one to get started.</p>
         )}
       </section>
+
+      <div className="header-actions">
+        {currentDigest ? (
+          <button className="secondary" type="button" onClick={handleShareDigest}>
+            Share
+          </button>
+        ) : null}
+        <button
+          className="secondary"
+          type="button"
+          onClick={handleRunDigest}
+          disabled={running}
+        >
+          {running ? "Generating..." : "Generate now"}
+        </button>
+        <label className="toggle-switch">
+          <input type="checkbox" checked={emailOptIn} onChange={handleToggleEmail} />
+          <span className="toggle-track" aria-hidden="true">
+            <span className="toggle-thumb" />
+          </span>
+          <span className="toggle-state">{emailOptIn ? "On" : "Off"}</span>
+          <span className="toggle-label">Weekly email</span>
+        </label>
+      </div>
 
       <section className="card digest-history">
         <div className="card-header">
