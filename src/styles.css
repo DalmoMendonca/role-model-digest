@@ -2054,6 +2054,124 @@ input:focus {
   }
 }
 
+/* Role Model Bio Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--surface);
+  border-radius: 12px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--ink);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.modal-content .role-model-hero {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-content .role-model-hero img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--accent);
+}
+
+.modal-content .role-model-hero-info h3 {
+  margin: 0 0 4px 0;
+  color: var(--ink);
+}
+
+.modal-content .role-model-hero-info p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.modal-content .card {
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+.modal-content .card-header {
+  padding: 20px 20px 0 20px;
+}
+
+.modal-content .bio-text {
+  padding: 0 20px 20px 20px;
+}
+
+.role-model-link {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.role-model-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 @keyframes pulse-dots {
   0% {
     box-shadow: 10px 0 0 rgba(31, 191, 154, 0.2), 20px 0 0 rgba(31, 191, 154, 0.1);

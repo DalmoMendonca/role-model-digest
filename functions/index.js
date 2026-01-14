@@ -1488,7 +1488,7 @@ app.get("/api/notifications", requireAuth, async (req, res) => {
   res.json({ notifications, unreadCount });
 });
 
-app.get("/social/role-models/:id", async (req, res) => {
+app.get("/api/social/role-models/:id", async (req, res) => {
   const { id } = req.params;
   console.log("Role model bio request for ID:", id);
   

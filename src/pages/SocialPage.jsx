@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import RoleModelBioModal from "../components/RoleModelBioModal.jsx";
 import {
   addDigestComment,
   addDigestReaction,
@@ -134,6 +135,7 @@ export default function SocialPage() {
   const [replyDrafts, setReplyDrafts] = useState({});
   const [replyingTo, setReplyingTo] = useState({});
   const [openReactionFor, setOpenReactionFor] = useState(null);
+  const [bioModal, setBioModal] = useState({ isOpen: false, roleModelId: null });
 
   const loadPeers = async () => {
     const peerData = await getPeers();
@@ -261,6 +263,14 @@ export default function SocialPage() {
     }
   };
 
+  const handleOpenBioModal = (roleModelId) => {
+    setBioModal({ isOpen: true, roleModelId });
+  };
+
+  const handleCloseBioModal = () => {
+    setBioModal({ isOpen: false, roleModelId: null });
+  };
+
   const sortedTimeline = useMemo(() => timeline || [], [timeline]);
 
   return (
@@ -319,8 +329,11 @@ export default function SocialPage() {
                       url={entry.peerPhotoURL}
                       name={entry.peerName}
                     />
-                    {roleModelPath ? (
-                      <Link className="role-avatar-link" to={roleModelPath}>
+                    {entry.roleModelId ? (
+                      <button 
+                        className="role-avatar-link" 
+                        onClick={() => handleOpenBioModal(entry.roleModelId)}
+                      >
                         {entry.roleModelImageUrl ? (
                           <img
                             className="role-avatar"
@@ -331,7 +344,7 @@ export default function SocialPage() {
                         ) : (
                           <span className="role-avatar avatar-fallback">RM</span>
                         )}
-                      </Link>
+                      </button>
                     ) : entry.roleModelImageUrl ? (
                       <img
                         className="role-avatar"
@@ -345,10 +358,13 @@ export default function SocialPage() {
                   </div>
                   <div className="timeline-entry-meta">
                     <p className="peer-name">{entry.peerName}</p>
-                    {roleModelPath ? (
-                      <Link className="muted role-model-link" to={roleModelPath}>
+                    {entry.roleModelId ? (
+                      <button 
+                        className="muted role-model-link" 
+                        onClick={() => handleOpenBioModal(entry.roleModelId)}
+                      >
                         {entry.roleModelName || "No role model yet"}
-                      </Link>
+                      </button>
                     ) : (
                       <p className="muted">{entry.roleModelName || "No role model yet"}</p>
                     )}
@@ -473,15 +489,21 @@ export default function SocialPage() {
               <div className="discover-meta">
                 <p className="peer-name">{user.displayName || "Unnamed"}</p>
                 {user.roleModelId ? (
-                  <Link className="muted role-model-link" to={`/social/role-model/${user.roleModelId}`}>
+                  <button 
+                    className="muted role-model-link" 
+                    onClick={() => handleOpenBioModal(user.roleModelId)}
+                  >
                     {user.roleModelName || "No role model yet"}
-                  </Link>
+                  </button>
                 ) : (
                   <p className="muted">{user.roleModelName || "No role model yet"}</p>
                 )}
               </div>
               {user.roleModelId ? (
-                <Link className="role-avatar-link" to={`/social/role-model/${user.roleModelId}`}>
+                <button 
+                  className="role-avatar-link" 
+                  onClick={() => handleOpenBioModal(user.roleModelId)}
+                >
                   {user.roleModelImageUrl ? (
                     <img
                       className="role-avatar-inline"
@@ -492,7 +514,7 @@ export default function SocialPage() {
                   ) : (
                     <span className="role-avatar-inline avatar-fallback">RM</span>
                   )}
-                </Link>
+                </button>
               ) : user.roleModelImageUrl ? (
                 <img
                   className="role-avatar-inline"
@@ -538,7 +560,10 @@ export default function SocialPage() {
               <div className="peer-chip-header">
                 <Avatar className="avatar" url={peer.photoURL} name={peer.displayName} />
                 {peer.roleModelId ? (
-                  <Link className="role-avatar-link" to={`/social/role-model/${peer.roleModelId}`}>
+                  <button 
+                    className="role-avatar-link" 
+                    onClick={() => handleOpenBioModal(peer.roleModelId)}
+                  >
                     {peer.roleModelImageUrl ? (
                       <img
                         className="role-avatar-inline"
@@ -549,7 +574,7 @@ export default function SocialPage() {
                     ) : (
                       <span className="role-avatar-inline avatar-fallback">RM</span>
                     )}
-                  </Link>
+                  </button>
                 ) : peer.roleModelImageUrl ? (
                   <img
                     className="role-avatar-inline"
@@ -563,9 +588,12 @@ export default function SocialPage() {
               </div>
               <p className="peer-name">{peer.displayName}</p>
               {peer.roleModelId ? (
-                <Link className="muted role-model-link" to={`/social/role-model/${peer.roleModelId}`}>
+                <button 
+                  className="muted role-model-link" 
+                  onClick={() => handleOpenBioModal(peer.roleModelId)}
+                >
                   {peer.roleModelName || "No role model"}
-                </Link>
+                </button>
               ) : (
                 <p className="muted">{peer.roleModelName || "No role model"}</p>
               )}
@@ -621,6 +649,12 @@ export default function SocialPage() {
           </div>
         </div>
       </section>
+      
+      <RoleModelBioModal 
+        isOpen={bioModal.isOpen}
+        roleModelId={bioModal.roleModelId}
+        onClose={handleCloseBioModal}
+      />
     </div>
   );
 }
