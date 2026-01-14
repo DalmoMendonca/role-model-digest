@@ -665,15 +665,6 @@ app.post("/api/digests/run", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/social/role-models/:id", requireAuth, async (req, res) => {
-  const doc = await db.collection("roleModels").doc(req.params.id).get();
-  if (!doc.exists) {
-    return res.status(404).json({ error: "Role model not found" });
-  }
-  const roleModel = mapRoleModel(doc);
-  return res.json({ roleModel });
-});
-
 app.get("/api/digests/share/:id", async (req, res) => {
   const digest = await getPublicDigest(db, req.params.id);
   if (!digest) {
