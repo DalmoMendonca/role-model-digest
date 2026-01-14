@@ -488,16 +488,7 @@ export default function SocialPage() {
               <Avatar className="avatar" url={user.photoURL} name={user.displayName} />
               <div className="discover-meta">
                 <p className="peer-name">{user.displayName || "Unnamed"}</p>
-                {user.roleModelId ? (
-                  <button 
-                    className="muted role-model-link" 
-                    onClick={() => handleOpenBioModal(user.roleModelId)}
-                  >
-                    {user.roleModelName || "No role model yet"}
-                  </button>
-                ) : (
-                  <p className="muted">{user.roleModelName || "No role model yet"}</p>
-                )}
+                <p className="muted">{user.roleModelName || "No role model yet"}</p>
               </div>
               {user.roleModelId ? (
                 <button 

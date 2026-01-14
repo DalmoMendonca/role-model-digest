@@ -11,7 +11,6 @@ export default function Nav({ user, roleModel, onLogout, onImageRefresh, onUserU
   return (
     <nav className="nav">
       <div className="brand">
-        <div className="brand-mark">📚</div>
         <div>
           <h1>Role Model Digest</h1>
           <p className="brand-tagline">Weekly wisdom from your heroes</p>
