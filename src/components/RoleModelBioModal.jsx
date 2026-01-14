@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getBio } from "../api.js";
 
 export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
   const [roleModel, setRoleModel] = useState(null);
@@ -14,32 +15,18 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
       setError(null);
       
       try {
-        // Use a direct Firestore approach instead of API
-        const { doc, getDoc, collection, query, where, orderBy, limit, getDocs } = await import("firebase/firestore");
-        const { db } = await import("../firebase.js");
-        
-        // Get role model data
-        const roleModelDoc = await doc(db, "roleModels", roleModelId).get();
-        if (!roleModelDoc.exists()) {
-          setError("Role model not found");
+        // Use API call instead of direct Firestore approach
+        const bioData = await getBio(roleModelId);
+        if (!bioData) {
+          setError("Failed to load bio information");
           return;
         }
         
-        const roleModelData = { id: roleModelDoc.id, ...roleModelDoc.data() };
-        setRoleModel(roleModelData);
+        setBio(bioData.bioText || "");
         
-        // Get bio data
-        const bioQuery = query(
-          collection(db, "bios"),
-          where("roleModelId", "==", roleModelId),
-          orderBy("createdAt", "desc"),
-          limit(1)
-        );
-        
-        const bioSnapshot = await getDocs(bioQuery);
-        if (!bioSnapshot.empty) {
-          const bioData = { id: bioSnapshot.docs[0].id, ...bioSnapshot.docs[0].data() };
-          setBio(bioData);
+        // Get role model data from bio response
+        if (bioData.roleModel) {
+          setRoleModel(bioData.roleModel);
         }
       } catch (err) {
         console.error("Failed to load bio:", err);
@@ -107,18 +94,7 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
               
               {bio ? (
                 <div className="bio-text">
-                  <p>{bio.bioText}</p>
-                  {bio.personalNotes && (
-                    <div style={{ marginTop: "16px" }}>
-                      <h5>Personal Notes</h5>
-                      <p style={{ fontStyle: "italic", color: "var(--muted)" }}>
-                        {bio.personalNotes}
-                      </p>
-                    </div>
-                  )}
-                  <p className="muted" style={{ marginTop: "12px", fontSize: "0.8rem" }}>
-                    Last updated {formatDateTime(bio.updatedAt || bio.createdAt)}
-                  </p>
+                  <p>{bio}</p>
                 </div>
               ) : (
                 <p className="muted">No bio available for this role model.</p>
