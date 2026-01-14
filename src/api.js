@@ -1,6 +1,8 @@
 import { auth, signOutUser } from "./firebase.js";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://us-central1-role-model-digest-2026.cloudfunctions.net/api";
+const API_BASE = import.meta.env.VITE_API_URL || "https://us-central1-role-model-digest-2026.cloudfunctions.net";
+console.log('VITE_API_URL:', import.meta.env.VITE_API_URL);
+console.log('API_BASE:', API_BASE);
 
 export async function apiRequest(path, options = {}) {
   const headers = {
