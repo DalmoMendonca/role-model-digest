@@ -1,12 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getUnreadNotificationCount } from "../api.js";
+import { auth, onAuthChange } from "../firebase.js";
 
 export default function FloatingNotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const pollRef = useRef(null);
 
   const loadUnreadCount = async () => {
     try {
+      if (!auth.currentUser) {
+        setUnreadCount(0);
+        return;
+      }
       const count = await getUnreadNotificationCount();
       setUnreadCount(count?.unreadCount || 0);
     } catch (error) {
@@ -15,9 +20,35 @@ export default function FloatingNotificationBell() {
   };
 
   useEffect(() => {
-    loadUnreadCount();
-    const interval = setInterval(loadUnreadCount, 25000);
-    return () => clearInterval(interval);
+    const startPolling = () => {
+      if (pollRef.current) return;
+      loadUnreadCount();
+      pollRef.current = setInterval(loadUnreadCount, 25000);
+    };
+
+    const stopPolling = () => {
+      if (!pollRef.current) return;
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
+
+    const unsubscribe = onAuthChange((user) => {
+      if (user) {
+        startPolling();
+      } else {
+        stopPolling();
+        setUnreadCount(0);
+      }
+    });
+
+    if (auth.currentUser) {
+      startPolling();
+    }
+
+    return () => {
+      stopPolling();
+      unsubscribe();
+    };
   }, []);
 
   return (

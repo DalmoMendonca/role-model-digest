@@ -8,6 +8,8 @@
   --accent-2: #1fbf9a;
   --accent-3: #f3b700;
   --card: rgba(255, 255, 255, 0.72);
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-strong: rgba(255, 255, 255, 0.98);
   --border: rgba(17, 20, 24, 0.12);
   --shadow: 0 32px 60px rgba(17, 20, 24, 0.14);
   --radius: 20px;
@@ -2104,7 +2106,8 @@ input:focus {
   align-items: center;
   padding: 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-strong);
+  backdrop-filter: blur(6px);
 }
 
 .modal-header h2 {

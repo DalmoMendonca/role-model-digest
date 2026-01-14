@@ -1512,17 +1512,22 @@ app.get("/api/social/role-models/:id", async (req, res) => {
 
     const roleModel = mapRoleModel(roleDoc);
 
-    const bioSnap = await db
-      .collection("bios")
-      .where("roleModelId", "==", roleDoc.id)
-      .orderBy("createdAt", "desc")
-      .limit(1)
-      .get();
-
     let bio = null;
-    if (!bioSnap.empty) {
-      bio = { id: bioSnap.docs[0].id, ...bioSnap.docs[0].data() };
-    } else if (roleModel?.bioText) {
+    try {
+      const bioSnap = await db
+        .collection("bios")
+        .where("roleModelId", "==", roleDoc.id)
+        .limit(1)
+        .get();
+
+      if (!bioSnap.empty) {
+        bio = { id: bioSnap.docs[0].id, ...bioSnap.docs[0].data() };
+      }
+    } catch (error) {
+      console.warn("Bio lookup failed, falling back to role model bio.", error);
+    }
+
+    if (!bio && roleModel?.bioText) {
       const updatedAt = roleModel.bioUpdatedAt || null;
       bio = {
         bioText: roleModel.bioText,
