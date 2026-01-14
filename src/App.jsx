@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { auth } from "./firebase.js";
-import { getRoleModel } from "./api.js";
+import { auth, onAuthChange } from "./firebase.js";
+import { getRoleModel, getMe, getRoleModelImage, logout } from "./api.js";
 import AuthScreen from "./components/AuthScreen.jsx";
 import RoleModelSetup from "./pages/RoleModelSetup.jsx";
 import BioPage from "./pages/BioPage.jsx";

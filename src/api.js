@@ -12,7 +12,13 @@ export async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  // Handle API path to avoid double /api
+  let fullPath = path;
+  if (API_BASE && API_BASE.endsWith('/api') && path.startsWith('/api')) {
+    fullPath = path.substring(4); // Remove /api from path
+  }
+  
+  const response = await fetch(`${API_BASE}${fullPath}`, {
     headers,
     ...options
   });
