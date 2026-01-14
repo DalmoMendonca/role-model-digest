@@ -1,6 +1,39 @@
 import { auth, signOutUser } from "./firebase.js";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://us-central1-role-model-digest-2026.cloudfunctions.net";
+const API_BASE_NORMALIZED = API_BASE.replace(/\/+$/, "");
+
+const normalizePath = (path) => (path.startsWith("/") ? path : `/${path}`);
+
+function buildApiUrls(path) {
+  const normalizedPath = normalizePath(path);
+  const primaryUrl = `${API_BASE_NORMALIZED}${normalizedPath}`;
+  let fallbackUrl = null;
+
+  // Avoid a double "/api" when the base already includes "/api".
+  if (API_BASE_NORMALIZED.endsWith("/api") && normalizedPath.startsWith("/api/")) {
+    fallbackUrl = `${API_BASE_NORMALIZED}${normalizedPath.slice(4)}`;
+  }
+
+  return { primaryUrl, fallbackUrl };
+}
+
+async function requestOnce(url, options) {
+  const response = await fetch(url, options);
+
+  if (response.status === 204) {
+    return { response, data: null };
+  }
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+
+  return { response, data };
+}
 
 export async function apiRequest(path, options = {}) {
   const headers = {
@@ -12,20 +45,21 @@ export async function apiRequest(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const { primaryUrl, fallbackUrl } = buildApiUrls(path);
+  const requestOptions = {
     headers,
     ...options
-  });
+  };
 
-  if (response.status === 204) {
-    return null;
-  }
+  const { response, data } = await requestOnce(primaryUrl, requestOptions);
 
-  let data = null;
-  try {
-    data = await response.json();
-  } catch (error) {
-    data = null;
+  if (response.status === 404 && data === null && fallbackUrl) {
+    const retry = await requestOnce(fallbackUrl, requestOptions);
+    if (!retry.response.ok) {
+      const message = retry.data?.error || "Request failed";
+      throw new Error(message);
+    }
+    return retry.data;
   }
 
   if (!response.ok) {
