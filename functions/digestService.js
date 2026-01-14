@@ -170,9 +170,15 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     ...doc.data()
   }));
   const existingDoc = existingDocs.find((doc) => doc.weekStart === weekStart) || null;
+  const wasCreated = !existingDoc;
 
   if (existingDoc && !force) {
-    return getDigestsForRoleModel(db, roleModel.id);
+    return {
+      digests: await getDigestsForRoleModel(db, roleModel.id),
+      digestId: existingDoc.id,
+      weekStart,
+      wasCreated: false
+    };
   }
 
   const customSourceSnap = await db
@@ -300,7 +306,12 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     }
   }
 
-  return getDigestsForRoleModel(db, roleModel.id);
+  return {
+    digests: await getDigestsForRoleModel(db, roleModel.id),
+    digestId,
+    weekStart,
+    wasCreated
+  };
 }
 
 function buildDigestEmailHtml(roleModelName, digest, options) {

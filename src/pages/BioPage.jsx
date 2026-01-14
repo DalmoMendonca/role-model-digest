@@ -5,11 +5,11 @@ export default function BioPage({ roleModel, onRoleModelChange }) {
   const [bio, setBio] = useState(roleModel?.bioText || "");
   const [notes, setNotes] = useState(roleModel?.notesText || "");
   const [status, setStatus] = useState(null);
-  const [saving, setSaving] = useState(false);
   const [changing, setChanging] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [newName, setNewName] = useState("");
   const saveTimer = useRef(null);
+  const lastSavedNotes = useRef(roleModel?.notesText || "");
 
   useEffect(() => {
     let isMounted = true;
@@ -18,6 +18,7 @@ export default function BioPage({ roleModel, onRoleModelChange }) {
         if (!isMounted) return;
         setBio(data.bioText || "");
         setNotes(data.notesText || "");
+        lastSavedNotes.current = data.notesText || "";
       })
       .catch(() => null);
     return () => {
@@ -30,20 +31,24 @@ export default function BioPage({ roleModel, onRoleModelChange }) {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
     }
-    setSaving(true);
+
+    if (notes === lastSavedNotes.current) {
+      return undefined;
+    }
+
     saveTimer.current = setTimeout(() => {
       updateRoleModel({ notes })
         .then((data) => {
-          setSaving(false);
-          onRoleModelChange(data.roleModel);
+          if (data?.roleModel) {
+            lastSavedNotes.current = data.roleModel.notesText || "";
+            onRoleModelChange(data.roleModel);
+          }
         })
-        .catch(() => {
-          setSaving(false);
-        });
+        .catch(() => null);
     }, 900);
 
     return () => clearTimeout(saveTimer.current);
-  }, [notes, roleModel, onRoleModelChange]);
+  }, [notes, roleModel?.id, onRoleModelChange]);
 
   const handleRegenerate = async () => {
     setStatus(null);
@@ -117,7 +122,6 @@ export default function BioPage({ roleModel, onRoleModelChange }) {
           placeholder="What are you tracking, learning, or mirroring?"
           rows={8}
         />
-        <p className="status">{saving ? "Saving..." : "Saved"}</p>
       </section>
 
       <section className="card change-card">

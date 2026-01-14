@@ -40,6 +40,7 @@ function toPublicUser(user) {
     displayName: user.displayName,
     photoURL: user.photoURL || "",
     weeklyEmailOptIn: !!user.weeklyEmailOptIn,
+    zenMode: !!user.zenMode,
     timezone: user.timezone,
     currentRoleModelId: user.currentRoleModelId || null
   };
@@ -79,6 +80,7 @@ async function ensureUserDoc(decoded) {
       displayName: decoded.name || fallbackName,
       photoURL,
       weeklyEmailOptIn: true,
+      zenMode: false,
       timezone: "America/Los_Angeles",
       currentRoleModelId: null,
       createdAt: new Date().toISOString()
@@ -101,6 +103,9 @@ async function ensureUserDoc(decoded) {
   if (typeof data.weeklyEmailOptIn !== "boolean") {
     updates.weeklyEmailOptIn = true;
   }
+  if (typeof data.zenMode !== "boolean") {
+    updates.zenMode = false;
+  }
   if (Object.keys(updates).length) {
     await userRef.update(updates);
   }
@@ -121,6 +126,7 @@ async function ensureUserDocFromAuth(userRecord, normalizedEmail) {
       displayName: userRecord.displayName || fallbackName,
       photoURL,
       weeklyEmailOptIn: true,
+      zenMode: false,
       timezone: "America/Los_Angeles",
       currentRoleModelId: null,
       createdAt: new Date().toISOString()
@@ -144,11 +150,99 @@ async function ensureUserDocFromAuth(userRecord, normalizedEmail) {
   if (typeof data.weeklyEmailOptIn !== "boolean") {
     updates.weeklyEmailOptIn = true;
   }
+  if (typeof data.zenMode !== "boolean") {
+    updates.zenMode = false;
+  }
   if (Object.keys(updates).length) {
     await userRef.update(updates);
   }
   await attachPendingPeerRequests(userRecord.uid, normalizedEmail);
   return { ...data, ...updates, id: userRecord.uid };
+}
+
+async function shouldDeliverNotifications(userId) {
+  if (!userId) return false;
+  const doc = await db.collection("users").doc(userId).get();
+  if (!doc.exists) return true;
+  const data = doc.data() || {};
+  return !data.zenMode;
+}
+
+async function createNotification(payload) {
+  if (!payload?.userId) return null;
+  const allow = await shouldDeliverNotifications(payload.userId);
+  if (!allow) return null;
+  const id = payload.id || nanoid();
+  const createdAt = payload.createdAt || new Date().toISOString();
+  await db
+    .collection("users")
+    .doc(payload.userId)
+    .collection("notifications")
+    .doc(id)
+    .set(
+      {
+        id,
+        type: payload.type || "unknown",
+        createdAt,
+        readAt: payload.readAt ?? null,
+        actorUserId: payload.actorUserId || "",
+        actorName: payload.actorName || "",
+        actorPhotoURL: payload.actorPhotoURL || "",
+        roleModelId: payload.roleModelId || "",
+        roleModelName: payload.roleModelName || "",
+        digestId: payload.digestId || "",
+        commentId: payload.commentId || "",
+        message: payload.message || ""
+      },
+      { merge: true }
+    );
+  return id;
+}
+
+async function getDigestOwner(digestId) {
+  if (!digestId) return null;
+  const digestDoc = await db.collection("digests").doc(digestId).get();
+  if (!digestDoc.exists) return null;
+  const digest = digestDoc.data() || {};
+  if (!digest.roleModelId) return null;
+  const roleDoc = await db.collection("roleModels").doc(digest.roleModelId).get();
+  const role = roleDoc.exists ? roleDoc.data() || {} : {};
+  return {
+    roleModelId: digest.roleModelId,
+    roleModelName: role.name || "",
+    ownerUserId: role.userId || ""
+  };
+}
+
+async function notifyPeersOfNewDigest({ ownerUserId, roleModelId, roleModelName, digestId, createdAt }) {
+  if (!ownerUserId || !digestId) return;
+  const peerSnap = await db
+    .collection("peers")
+    .where("userId", "==", ownerUserId)
+    .get();
+  if (peerSnap.empty) return;
+
+  const ownerDoc = await db.collection("users").doc(ownerUserId).get();
+  const owner = ownerDoc.exists ? ownerDoc.data() || {} : {};
+
+  for (const doc of peerSnap.docs) {
+    const peerId = doc.data()?.peerId;
+    if (!peerId || peerId === ownerUserId) continue;
+    const notificationId = `new_digest_${digestId}_${ownerUserId}`;
+    await createNotification({
+      id: notificationId,
+      userId: peerId,
+      type: "new_digest",
+      createdAt: createdAt || new Date().toISOString(),
+      actorUserId: ownerUserId,
+      actorName: owner.displayName || owner.email || "",
+      actorPhotoURL: owner.photoURL || "",
+      roleModelId: roleModelId || "",
+      roleModelName: roleModelName || "",
+      digestId,
+      message: `${owner.displayName || "Someone"} posted a new digest.`
+    });
+  }
 }
 
 async function attachPendingPeerRequests(userId, normalizedEmail) {
@@ -544,12 +638,23 @@ app.post("/api/digests/run", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "No role model set" });
   }
   try {
-    const digests = await generateWeeklyDigest(db, {
+    const result = await generateWeeklyDigest(db, {
       user: req.user,
       roleModel,
       force: true
     });
-    res.json({ digests });
+
+    if (result?.wasCreated) {
+      await notifyPeersOfNewDigest({
+        ownerUserId: req.userId,
+        roleModelId: roleModel.id,
+        roleModelName: roleModel.name,
+        digestId: result.digestId,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    res.json({ digests: result?.digests || [] });
   } catch (error) {
     console.error("Digest generation failed", error);
     const detail = typeof error?.message === "string" ? error.message : "";
@@ -558,6 +663,15 @@ app.post("/api/digests/run", requireAuth, async (req, res) => {
       : "Digest generation failed";
     res.status(502).json({ error: message });
   }
+});
+
+app.get("/api/social/role-models/:id", requireAuth, async (req, res) => {
+  const doc = await db.collection("roleModels").doc(req.params.id).get();
+  if (!doc.exists) {
+    return res.status(404).json({ error: "Role model not found" });
+  }
+  const roleModel = mapRoleModel(doc);
+  return res.json({ roleModel });
 });
 
 app.get("/api/digests/share/:id", async (req, res) => {
@@ -569,11 +683,15 @@ app.get("/api/digests/share/:id", async (req, res) => {
 });
 
 app.patch("/api/preferences", requireAuth, async (req, res) => {
-  const { weeklyEmailOptIn, timezone } = req.body || {};
+  const { weeklyEmailOptIn, timezone, zenMode } = req.body || {};
   const updates = {
     weeklyEmailOptIn: !!weeklyEmailOptIn,
     timezone: timezone || req.user.timezone || "America/Los_Angeles"
   };
+
+  if (typeof zenMode === "boolean") {
+    updates.zenMode = zenMode;
+  }
 
   await db.collection("users").doc(req.userId).update(updates);
   const updated = await db.collection("users").doc(req.userId).get();
@@ -742,6 +860,7 @@ app.get("/api/admin/overview", requireAuth, async (req, res) => {
       email: user.email || "",
       displayName: user.displayName || "",
       weeklyEmailOptIn: !!user.weeklyEmailOptIn,
+      zenMode: !!user.zenMode,
       timezone: user.timezone || "",
       createdAt: user.createdAt || "",
       currentRoleModelId: user.currentRoleModelId || "",
@@ -1234,11 +1353,14 @@ app.post("/api/social/digests/:digestId/reactions", requireAuth, async (req, res
   const snapshot = await reactionRef.get();
   const now = new Date().toISOString();
 
+  let shouldNotify = false;
+
   if (snapshot.exists) {
     const existing = snapshot.data();
     if (existing?.type === type) {
       await reactionRef.delete();
     } else {
+      shouldNotify = true;
       await reactionRef.set(
         {
           digestId,
@@ -1251,6 +1373,7 @@ app.post("/api/social/digests/:digestId/reactions", requireAuth, async (req, res
       );
     }
   } else {
+    shouldNotify = true;
     await reactionRef.set({
       digestId,
       userId: req.userId,
@@ -1258,6 +1381,26 @@ app.post("/api/social/digests/:digestId/reactions", requireAuth, async (req, res
       createdAt: now,
       updatedAt: now
     });
+  }
+
+  if (shouldNotify) {
+    const owner = await getDigestOwner(digestId);
+    if (owner?.ownerUserId && owner.ownerUserId !== req.userId) {
+      const notificationId = `reaction_${digestId}_${req.userId}`;
+      await createNotification({
+        id: notificationId,
+        userId: owner.ownerUserId,
+        type: "reaction",
+        createdAt: now,
+        actorUserId: req.userId,
+        actorName: req.user.displayName || req.user.email || "",
+        actorPhotoURL: req.user.photoURL || "",
+        roleModelId: owner.roleModelId,
+        roleModelName: owner.roleModelName,
+        digestId,
+        message: `${req.user.displayName || "Someone"} reacted to your digest.`
+      });
+    }
   }
 
   const reactions = await getReactionSummary(digestId, req.userId);
@@ -1283,8 +1426,145 @@ app.post("/api/social/digests/:digestId/comments", requireAuth, async (req, res)
     createdAt: now
   });
 
+  const owner = await getDigestOwner(digestId);
+  if (owner?.ownerUserId && owner.ownerUserId !== req.userId) {
+    await createNotification({
+      id: `comment_${commentId}`,
+      userId: owner.ownerUserId,
+      type: parentId ? "reply" : "comment",
+      createdAt: now,
+      actorUserId: req.userId,
+      actorName: req.user.displayName || req.user.email || "",
+      actorPhotoURL: req.user.photoURL || "",
+      roleModelId: owner.roleModelId,
+      roleModelName: owner.roleModelName,
+      digestId,
+      commentId,
+      message: parentId
+        ? `${req.user.displayName || "Someone"} replied on your digest.`
+        : `${req.user.displayName || "Someone"} commented on your digest.`
+    });
+  }
+
+  if (parentId) {
+    const parentSnap = await db.collection("digestComments").doc(parentId).get();
+    const parent = parentSnap.exists ? parentSnap.data() || {} : {};
+    const parentUserId = parent.userId || "";
+    if (parentUserId && parentUserId !== req.userId && parentUserId !== owner?.ownerUserId) {
+      await createNotification({
+        id: `reply_${commentId}`,
+        userId: parentUserId,
+        type: "reply",
+        createdAt: now,
+        actorUserId: req.userId,
+        actorName: req.user.displayName || req.user.email || "",
+        actorPhotoURL: req.user.photoURL || "",
+        roleModelId: owner?.roleModelId || "",
+        roleModelName: owner?.roleModelName || "",
+        digestId,
+        commentId,
+        message: `${req.user.displayName || "Someone"} replied to your comment.`
+      });
+    }
+  }
+
   const comments = await getDigestCommentsThread(digestId);
   res.json({ comments });
+});
+
+app.get("/api/notifications/unread-count", requireAuth, async (req, res) => {
+  const snapshot = await db
+    .collection("users")
+    .doc(req.userId)
+    .collection("notifications")
+    .where("readAt", "==", null)
+    .get();
+  res.json({ unreadCount: snapshot.size || 0 });
+});
+
+app.get("/api/notifications", requireAuth, async (req, res) => {
+  const limit = Math.max(1, Math.min(50, Number.parseInt(req.query.limit, 10) || 30));
+  const snapshot = await db
+    .collection("users")
+    .doc(req.userId)
+    .collection("notifications")
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+
+  const notifications = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const unreadCount = notifications.filter((n) => !n.readAt).length;
+  res.json({ notifications, unreadCount });
+});
+
+app.get("/api/social/role-models/:id", async (req, res) => {
+  const { id } = req.params;
+  console.log("Role model bio request for ID:", id);
+  
+  if (!id) {
+    return res.status(400).json({ error: "Role model ID required" });
+  }
+
+  const roleDoc = await db.collection("roleModels").doc(id).get();
+  console.log("Role model doc exists:", roleDoc.exists);
+  
+  if (!roleDoc.exists) {
+    return res.status(404).json({ error: "Role model not found" });
+  }
+
+  const roleModel = { id: roleDoc.id, ...roleDoc.data() };
+  console.log("Role model data:", { id: roleModel.id, name: roleModel.name });
+  
+  // Get bio for this role model
+  const bioSnap = await db
+    .collection("bios")
+    .where("roleModelId", "==", id)
+    .orderBy("createdAt", "desc")
+    .limit(1)
+    .get();
+
+  let bio = null;
+  if (!bioSnap.empty) {
+    bio = { id: bioSnap.docs[0].id, ...bioSnap.docs[0].data() };
+    console.log("Bio found:", bio.id);
+  } else {
+    console.log("No bio found for role model");
+  }
+
+  res.json({ roleModel, bio });
+});
+
+app.post("/api/notifications/read-all", requireAuth, async (req, res) => {
+  const snapshot = await db
+    .collection("users")
+    .doc(req.userId)
+    .collection("notifications")
+    .where("readAt", "==", null)
+    .get();
+  if (snapshot.empty) {
+    return res.json({ status: "ok" });
+  }
+  const batch = db.batch();
+  const now = new Date().toISOString();
+  snapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, { readAt: now });
+  });
+  await batch.commit();
+  return res.json({ status: "ok" });
+});
+
+app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
+  const notificationRef = db
+    .collection("users")
+    .doc(req.userId)
+    .collection("notifications")
+    .doc(req.params.id);
+  const doc = await notificationRef.get();
+  if (!doc.exists) {
+    return res.status(404).json({ error: "Notification not found" });
+  }
+  await notificationRef.update({ readAt: new Date().toISOString() });
+  return res.json({ status: "ok" });
 });
 
 export const api = onRequest(app);
@@ -1306,11 +1586,21 @@ export const weeklyDigests = onSchedule(
       const userDoc = await db.collection("users").doc(roleModel.userId).get();
       const user = userDoc.data();
       if (!user) continue;
-      await generateWeeklyDigest(db, {
+      const result = await generateWeeklyDigest(db, {
         user: { ...user, id: userDoc.id },
         roleModel: { id: doc.id, name: roleModel.name },
         force: false
       });
+
+      if (result?.wasCreated) {
+        await notifyPeersOfNewDigest({
+          ownerUserId: roleModel.userId,
+          roleModelId: doc.id,
+          roleModelName: roleModel.name,
+          digestId: result.digestId,
+          createdAt: new Date().toISOString()
+        });
+      }
     }
   }
 );

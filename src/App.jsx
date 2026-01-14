@@ -8,9 +8,11 @@ import RoleModelSetup from "./components/RoleModelSetup.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
 import BioPage from "./pages/BioPage.jsx";
 import DigestPage from "./pages/DigestPage.jsx";
+import NotificationsPage from "./pages/NotificationsPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 import PublicDigestPage from "./pages/PublicDigestPage.jsx";
 import SocialPage from "./pages/SocialPage.jsx";
+import SocialRoleModelPage from "./pages/SocialRoleModelPage.jsx";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -141,6 +143,7 @@ export default function App() {
           roleModel={roleModel}
           onLogout={handleLogout}
           onImageRefresh={handleImageRefresh}
+          onUserUpdate={setUser}
           isAdmin={isAdmin}
         />
         <main className="stage">
@@ -165,6 +168,11 @@ export default function App() {
               }
             />
             <Route path="/social" element={<SocialPage />} />
+            <Route path="/social/role-model/:id" element={<SocialRoleModelPage />} />
+            <Route
+              path="/notifications"
+              element={<NotificationsPage user={user} onUserUpdate={setUser} />}
+            />
             <Route
               path="/admin"
               element={isAdmin ? <AdminPage /> : <Navigate to="/bio" replace />}

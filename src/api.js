@@ -150,3 +150,24 @@ export function addDigestComment(digestId, payload) {
 export function getDigestThread(digestId) {
   return apiRequest(`/api/social/digests/${digestId}/thread`);
 }
+
+export function getNotifications(limit) {
+  const query = limit ? `?limit=${encodeURIComponent(limit)}` : "";
+  return apiRequest(`/api/notifications${query}`);
+}
+
+export function getUnreadNotificationCount() {
+  return apiRequest("/api/notifications/unread-count");
+}
+
+export function markAllNotificationsRead() {
+  return apiRequest("/api/notifications/read-all", { method: "POST" });
+}
+
+export function markNotificationRead(notificationId) {
+  return apiRequest(`/api/notifications/${notificationId}/read`, { method: "POST" });
+}
+
+export function getSocialRoleModel(roleModelId) {
+  return apiRequest(`/api/social/role-models/${roleModelId}`);
+}

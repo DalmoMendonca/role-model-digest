@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   addDigestComment,
   addDigestReaction,
@@ -132,6 +133,7 @@ export default function SocialPage() {
   const [commentDrafts, setCommentDrafts] = useState({});
   const [replyDrafts, setReplyDrafts] = useState({});
   const [replyingTo, setReplyingTo] = useState({});
+  const [openReactionFor, setOpenReactionFor] = useState(null);
 
   const loadPeers = async () => {
     const peerData = await getPeers();
@@ -215,9 +217,15 @@ export default function SocialPage() {
           entry.digestId === digestId ? { ...entry, reactions: data } : entry
         )
       );
+      // Don't close the reaction tray after reacting - keep it open for UX
     } catch (error) {
       setStatus(error.message);
     }
+  };
+
+  const handleToggleReactions = (digestId) => {
+    if (!digestId) return;
+    setOpenReactionFor((prev) => (prev === digestId ? null : digestId));
   };
 
   const handleCommentChange = (digestId, value) => {
@@ -301,6 +309,7 @@ export default function SocialPage() {
             const activeReactions = reactions.filter(
               (reaction) => (reactionsByType[reaction.type] || 0) > 0
             );
+            const roleModelPath = entry.roleModelId ? `/social/role-model/${entry.roleModelId}` : null;
             return (
               <article key={digestId} className="timeline-entry">
                 <div className="timeline-entry-header">
@@ -310,7 +319,20 @@ export default function SocialPage() {
                       url={entry.peerPhotoURL}
                       name={entry.peerName}
                     />
-                    {entry.roleModelImageUrl ? (
+                    {roleModelPath ? (
+                      <Link className="role-avatar-link" to={roleModelPath}>
+                        {entry.roleModelImageUrl ? (
+                          <img
+                            className="role-avatar"
+                            src={entry.roleModelImageUrl}
+                            alt={entry.roleModelName || "Role model"}
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="role-avatar avatar-fallback">RM</span>
+                        )}
+                      </Link>
+                    ) : entry.roleModelImageUrl ? (
                       <img
                         className="role-avatar"
                         src={entry.roleModelImageUrl}
@@ -323,7 +345,13 @@ export default function SocialPage() {
                   </div>
                   <div className="timeline-entry-meta">
                     <p className="peer-name">{entry.peerName}</p>
-                    <p className="muted">{entry.roleModelName || "No role model yet"}</p>
+                    {roleModelPath ? (
+                      <Link className="muted role-model-link" to={roleModelPath}>
+                        {entry.roleModelName || "No role model yet"}
+                      </Link>
+                    ) : (
+                      <p className="muted">{entry.roleModelName || "No role model yet"}</p>
+                    )}
                   </div>
                   <p className="timeline-date">{formatDateTime(digestDate)}</p>
                 </div>
@@ -331,7 +359,7 @@ export default function SocialPage() {
                   {entry.summaryText || "No digest summary yet."}
                 </p>
                 <div className="reaction-bar">
-                  <div className="reaction-control">
+                  <div className={`reaction-control ${openReactionFor === digestId ? "open" : ""}`}>
                     <button
                       className={`reaction-trigger ${
                         entry.reactions?.viewerReaction ? "active" : ""
@@ -339,6 +367,7 @@ export default function SocialPage() {
                       type="button"
                       aria-label="React to digest"
                       disabled={!digestId}
+                      onClick={() => handleToggleReactions(digestId)}
                     >
                       <i className="fa-solid fa-face-smile" aria-hidden="true" />
                       <span>React</span>
@@ -443,11 +472,28 @@ export default function SocialPage() {
               <Avatar className="avatar" url={user.photoURL} name={user.displayName} />
               <div className="discover-meta">
                 <p className="peer-name">{user.displayName || "Unnamed"}</p>
-                <p className="muted">
-                  {user.roleModelName || "No role model yet"}
-                </p>
+                {user.roleModelId ? (
+                  <Link className="muted role-model-link" to={`/social/role-model/${user.roleModelId}`}>
+                    {user.roleModelName || "No role model yet"}
+                  </Link>
+                ) : (
+                  <p className="muted">{user.roleModelName || "No role model yet"}</p>
+                )}
               </div>
-              {user.roleModelImageUrl ? (
+              {user.roleModelId ? (
+                <Link className="role-avatar-link" to={`/social/role-model/${user.roleModelId}`}>
+                  {user.roleModelImageUrl ? (
+                    <img
+                      className="role-avatar-inline"
+                      src={user.roleModelImageUrl}
+                      alt={user.roleModelName || "Role model"}
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="role-avatar-inline avatar-fallback">RM</span>
+                  )}
+                </Link>
+              ) : user.roleModelImageUrl ? (
                 <img
                   className="role-avatar-inline"
                   src={user.roleModelImageUrl}
@@ -491,19 +537,38 @@ export default function SocialPage() {
             <div key={peer.id} className="peer-chip">
               <div className="peer-chip-header">
                 <Avatar className="avatar" url={peer.photoURL} name={peer.displayName} />
-              {peer.roleModelImageUrl ? (
-                <img
-                  className="role-avatar-inline"
-                  src={peer.roleModelImageUrl}
-                  alt={peer.roleModelName || "Role model"}
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="role-avatar-inline avatar-fallback">RM</span>
-              )}
+                {peer.roleModelId ? (
+                  <Link className="role-avatar-link" to={`/social/role-model/${peer.roleModelId}`}>
+                    {peer.roleModelImageUrl ? (
+                      <img
+                        className="role-avatar-inline"
+                        src={peer.roleModelImageUrl}
+                        alt={peer.roleModelName || "Role model"}
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="role-avatar-inline avatar-fallback">RM</span>
+                    )}
+                  </Link>
+                ) : peer.roleModelImageUrl ? (
+                  <img
+                    className="role-avatar-inline"
+                    src={peer.roleModelImageUrl}
+                    alt={peer.roleModelName || "Role model"}
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="role-avatar-inline avatar-fallback">RM</span>
+                )}
               </div>
               <p className="peer-name">{peer.displayName}</p>
-              <p className="muted">{peer.roleModelName || "No role model"}</p>
+              {peer.roleModelId ? (
+                <Link className="muted role-model-link" to={`/social/role-model/${peer.roleModelId}`}>
+                  {peer.roleModelName || "No role model"}
+                </Link>
+              ) : (
+                <p className="muted">{peer.roleModelName || "No role model"}</p>
+              )}
             </div>
           ))}
           {peers.length === 0 ? <p className="muted">No peers yet.</p> : null}
