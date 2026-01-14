@@ -23,7 +23,9 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
           return;
         }
         
-        setBio(bioData.bioText || "");
+        const bioText = bioData.bioText || "";
+        console.log("Setting bio text:", bioText);
+        setBio(bioText);
         
         // Get role model data from bio response
         if (bioData.roleModel) {
@@ -54,6 +56,8 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
   }
 
   if (!isOpen) return null;
+
+  console.log("Modal render state:", { loading, error, bio, roleModel });
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -100,6 +104,11 @@ export default function RoleModelBioModal({ roleModelId, isOpen, onClose }) {
               ) : (
                 <p className="muted">No bio available for this role model.</p>
               )}
+              
+              {/* Debug info */}
+              <div style={{ marginTop: "20px", padding: "10px", background: "#f0f0f0", fontSize: "12px" }}>
+                <strong>Debug:</strong> bio length = {bio ? bio.length : 0}, roleModel = {roleModel ? 'exists' : 'null'}
+              </div>
             </div>
           </div>
         ) : null}
