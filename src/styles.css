@@ -528,6 +528,19 @@ input:focus {
   background: rgba(17, 20, 24, 0.08);
 }
 
+.auth-watermark {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  width: clamp(90px, 16vw, 140px);
+  opacity: 0.18;
+  filter: saturate(0.9);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  transform: rotate(-6deg);
+  z-index: 0;
+}
+
 .dictionary-entry {
   position: relative;
   z-index: 1;
@@ -1690,6 +1703,13 @@ input:focus {
 
   .auth-visual {
     min-height: 280px;
+  }
+
+  .auth-watermark {
+    bottom: 12px;
+    right: 12px;
+    width: 96px;
+    opacity: 0.14;
   }
 
   .inline-form {

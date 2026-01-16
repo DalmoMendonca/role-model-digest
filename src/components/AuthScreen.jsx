@@ -47,6 +47,7 @@ export default function AuthScreen() {
         </div>
       </div>
       <div className="auth-visual">
+        <img className="auth-watermark" src="/digest.png" alt="" aria-hidden="true" />
         <div className="orb" />
         <div className="orb small" />
         <div className="stripe" />
