@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { adminRespondPeerRequest, getAdminOverview } from "../api.js";
+import { adminRespondPeerRequest, getAdminOverview, runAllDigests } from "../api.js";
 
 function formatDate(value) {
   if (!value) return "";
@@ -30,6 +30,8 @@ export default function AdminPage() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busyRequestId, setBusyRequestId] = useState(null);
+  const [digestRunStatus, setDigestRunStatus] = useState(null);
+  const [digestRunning, setDigestRunning] = useState(false);
 
   const loadAdminOverview = () => {
     let isMounted = true;
@@ -64,6 +66,23 @@ export default function AdminPage() {
       setStatus(error.message);
     } finally {
       setBusyRequestId(null);
+    }
+  };
+
+  const handleRunAllDigests = async () => {
+    setDigestRunStatus(null);
+    setDigestRunning(true);
+    try {
+      const result = await runAllDigests();
+      if (result.queued === 0) {
+        setDigestRunStatus({ type: "success", message: `All ${result.alreadyDone} active role models already have a digest for this week.` });
+      } else {
+        setDigestRunStatus({ type: "success", message: `Started generating ${result.queued} missing digest${result.queued !== 1 ? "s" : ""} (${result.alreadyDone} already done). Emails will go out in a few minutes.` });
+      }
+    } catch (error) {
+      setDigestRunStatus({ type: "error", message: error.message });
+    } finally {
+      setDigestRunning(false);
     }
   };
 
@@ -110,6 +129,34 @@ export default function AdminPage() {
             <div className="card metric-card">
               <p className="metric-label">Pending requests</p>
               <p className="metric-value">{summary.pendingRequestCount || 0}</p>
+            </div>
+          </section>
+
+          <section className="admin-actions">
+            <div className="card admin-action-card">
+              <div className="admin-action-info">
+                <p className="admin-action-title">Run missing digests</p>
+                <p className="muted">
+                  Generates digests and sends emails for any active role models
+                  that don't yet have one for the current week. Safe to run
+                  multiple times — already-completed digests are skipped.
+                </p>
+              </div>
+              <div className="admin-action-controls">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={handleRunAllDigests}
+                  disabled={digestRunning}
+                >
+                  {digestRunning ? "Running…" : "Run now"}
+                </button>
+                {digestRunStatus ? (
+                  <p className={`admin-action-status ${digestRunStatus.type}`}>
+                    {digestRunStatus.message}
+                  </p>
+                ) : null}
+              </div>
             </div>
           </section>
 

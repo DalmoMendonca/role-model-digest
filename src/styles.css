@@ -1388,6 +1388,56 @@ input:focus {
   gap: 20px;
 }
 
+.admin-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-action-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+  flex-wrap: wrap;
+}
+
+.admin-action-info {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.admin-action-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.admin-action-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.admin-action-status {
+  margin: 0;
+  font-size: 0.85rem;
+  max-width: 320px;
+  text-align: right;
+}
+
+.admin-action-status.success {
+  color: #0c5c4b;
+}
+
+.admin-action-status.error {
+  color: var(--error, #c0392b);
+}
+
 .admin-user-card {
   display: grid;
   gap: 20px;

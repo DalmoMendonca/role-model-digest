@@ -14,6 +14,7 @@ import {
   getPublicDigest
 } from "./digestService.js";
 import { sendInviteEmail } from "./email.js";
+import { getWeekStart, toIsoDate } from "./utils/date.js";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -21,12 +22,19 @@ const db = admin.firestore();
 const app = express();
 const allowedOrigins = [
   process.env.CLIENT_ORIGIN,
-  process.env.CLIENT_ORIGIN_DEV
+  process.env.CLIENT_ORIGIN_DEV,
+  ...(process.env.CORS_ORIGIN_EXTRA || "").split(",").map((s) => s.trim()).filter(Boolean)
 ].filter(Boolean);
 
 app.use(
   cors({
-    origin: allowedOrigins.length ? allowedOrigins : true,
+    origin: allowedOrigins.length
+      ? (origin, callback) => {
+          if (!origin) return callback(null, true);
+          if (allowedOrigins.includes(origin)) return callback(null, true);
+          callback(new Error(`CORS: origin not allowed — ${origin}`));
+        }
+      : true,
     credentials: true
   })
 );
@@ -874,6 +882,74 @@ app.get("/api/admin/overview", requireAuth, async (req, res) => {
   res.json({ summary, users: adminUsers });
 });
 
+app.post("/api/admin/digests/run-all", requireAuth, async (req, res) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  // Only run for role models that don't already have a digest for the current week
+  const weekStart = toIsoDate(getWeekStart(new Date()));
+
+  const roleModelsSnap = await db
+    .collection("roleModels")
+    .where("isActive", "==", true)
+    .get();
+
+  // Find which role model IDs already have a digest this week
+  const existingSnap = await db
+    .collection("digests")
+    .where("weekStart", "==", weekStart)
+    .get();
+  const alreadyDone = new Set(existingSnap.docs.map((d) => d.data().roleModelId).filter(Boolean));
+
+  const pending = roleModelsSnap.docs.filter((doc) => !alreadyDone.has(doc.id));
+
+  if (!pending.length) {
+    return res.json({ status: "ok", message: "All role models already have a digest for this week.", weekStart, ran: 0, failed: 0 });
+  }
+
+  // Kick off generation in the background so the HTTP response returns immediately
+  res.json({
+    status: "started",
+    weekStart,
+    total: roleModelsSnap.size,
+    alreadyDone: alreadyDone.size,
+    queued: pending.length
+  });
+
+  // Run after response is sent
+  const results = { success: 0, failed: 0 };
+  for (const doc of pending) {
+    const roleModel = doc.data();
+    if (!roleModel?.userId) continue;
+    try {
+      const userDoc = await db.collection("users").doc(roleModel.userId).get();
+      const user = userDoc.data();
+      if (!user) continue;
+      const result = await generateWeeklyDigest(db, {
+        user: { ...user, id: userDoc.id },
+        roleModel: { id: doc.id, name: roleModel.name },
+        force: false
+      });
+      if (result?.wasCreated) {
+        await notifyPeersOfNewDigest({
+          ownerUserId: roleModel.userId,
+          roleModelId: doc.id,
+          roleModelName: roleModel.name,
+          digestId: result.digestId,
+          createdAt: new Date().toISOString()
+        });
+      }
+      results.success++;
+      console.log(`[run-all] ✓ ${roleModel.name}`);
+    } catch (err) {
+      results.failed++;
+      console.error(`[run-all] ✗ ${roleModel.name}:`, err?.message || err);
+    }
+  }
+  console.log(`[run-all] Done — success: ${results.success}, failed: ${results.failed}`);
+});
+
 app.post("/api/admin/requests/:id/accept", requireAuth, async (req, res) => {
   if (!isAdminUser(req.user)) {
     return res.status(403).json({ error: "Forbidden" });
@@ -1580,8 +1656,8 @@ export const api = onRequest(app);
 
 export const weeklyDigests = onSchedule(
   {
-    schedule: "0 8 * * 1",
-    timeZone: process.env.CRON_TIMEZONE || "America/Los_Angeles"
+    schedule: "0 9 * * 1",
+    timeZone: process.env.CRON_TIMEZONE || "America/Chicago"
   },
   async () => {
     const roleModelsSnap = await db
@@ -1589,27 +1665,52 @@ export const weeklyDigests = onSchedule(
       .where("isActive", "==", true)
       .get();
 
+    console.log(`[weeklyDigests] Starting run for ${roleModelsSnap.size} active role models`);
+    const results = { success: 0, skipped: 0, failed: 0 };
+
     for (const doc of roleModelsSnap.docs) {
       const roleModel = doc.data();
       if (!roleModel?.userId) continue;
-      const userDoc = await db.collection("users").doc(roleModel.userId).get();
-      const user = userDoc.data();
-      if (!user) continue;
-      const result = await generateWeeklyDigest(db, {
-        user: { ...user, id: userDoc.id },
-        roleModel: { id: doc.id, name: roleModel.name },
-        force: false
-      });
 
-      if (result?.wasCreated) {
-        await notifyPeersOfNewDigest({
-          ownerUserId: roleModel.userId,
-          roleModelId: doc.id,
-          roleModelName: roleModel.name,
-          digestId: result.digestId,
-          createdAt: new Date().toISOString()
+      try {
+        const userDoc = await db.collection("users").doc(roleModel.userId).get();
+        const user = userDoc.data();
+        if (!user) {
+          console.warn(`[weeklyDigests] No user found for role model ${roleModel.name} (userId: ${roleModel.userId})`);
+          results.skipped++;
+          continue;
+        }
+
+        const result = await generateWeeklyDigest(db, {
+          user: { ...user, id: userDoc.id },
+          roleModel: { id: doc.id, name: roleModel.name },
+          force: false
         });
+
+        if (result?.wasCreated) {
+          await notifyPeersOfNewDigest({
+            ownerUserId: roleModel.userId,
+            roleModelId: doc.id,
+            roleModelName: roleModel.name,
+            digestId: result.digestId,
+            createdAt: new Date().toISOString()
+          });
+        }
+
+        results.success++;
+        console.log(`[weeklyDigests] ✓ ${roleModel.name} (${user.email})`);
+      } catch (err) {
+        // Isolate failures — one bad role model must not abort the rest
+        results.failed++;
+        console.error(
+          `[weeklyDigests] ✗ ${roleModel.name} (userId: ${roleModel.userId}):`,
+          err?.message || err
+        );
       }
     }
+
+    console.log(
+      `[weeklyDigests] Done — success: ${results.success}, skipped: ${results.skipped}, failed: ${results.failed}`
+    );
   }
 );

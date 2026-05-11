@@ -78,6 +78,10 @@ export function logout() {
   return signOutUser();
 }
 
+export function getRoleModels() {
+  return apiRequest("/api/role-models");
+}
+
 export function setRoleModel(payload) {
   return apiRequest("/api/role-model", {
     method: "POST",
@@ -167,6 +171,12 @@ export function getAdminOverview() {
 
 export function adminRespondPeerRequest(requestId, action) {
   return apiRequest(`/api/admin/requests/${requestId}/${action}`, {
+    method: "POST"
+  });
+}
+
+export function runAllDigests() {
+  return apiRequest("/api/admin/digests/run-all", {
     method: "POST"
   });
 }

@@ -43,9 +43,21 @@ app.use(passport.session());
 const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
 const clientOrigin = process.env.CLIENT_ORIGIN || corsOrigin;
 
+// Support multiple allowed origins (comma-separated in CORS_ORIGIN_EXTRA or CORS_ORIGINS)
+const extraOrigins = (process.env.CORS_ORIGIN_EXTRA || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const allowedOrigins = new Set([corsOrigin, ...extraOrigins]);
+
 app.use(
   cors({
-    origin: corsOrigin,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (server-to-server, curl, etc.)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.has(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin not allowed — ${origin}`));
+    },
     credentials: true
   })
 );
@@ -141,6 +153,19 @@ app.post("/api/auth/logout", (req, res) => {
 // Google OAuth routes
 app.get(
   "/api/auth/google",
+  (req, res, next) => {
+    // Stash the referring origin so the callback can redirect back to the right domain
+    const referer = req.get("Referer") || "";
+    let originToStore = clientOrigin;
+    for (const allowed of allowedOrigins) {
+      if (referer.startsWith(allowed)) {
+        originToStore = allowed;
+        break;
+      }
+    }
+    req.session.oauthReturnOrigin = originToStore;
+    next();
+  },
   passport.authenticate("google", { scope: ["profile", "email"], prompt: "select_account" })
 );
 
@@ -152,7 +177,10 @@ app.get(
   (req, res) => {
     const token = createSessionToken(req.user);
     res.cookie("session", token, getCookieOptions());
-    res.redirect(`${clientOrigin}/?auth=google&status=success`);
+    // Redirect back to whichever origin initiated the OAuth flow
+    const returnOrigin = req.session.oauthReturnOrigin || clientOrigin;
+    delete req.session.oauthReturnOrigin;
+    res.redirect(`${returnOrigin}/?auth=google&status=success`);
   }
 );
 
@@ -657,6 +685,52 @@ function mapRoleModel(roleModel) {
     notesUpdatedAt: roleModel.notes_updated_at
   };
 }
+
+// Suggested role models for new users
+const SUGGESTED_ROLE_MODELS = [
+  {
+    id: "oprah-winfrey",
+    name: "Oprah Winfrey",
+    description: "Media mogul and philanthropist who inspires through empowerment and education"
+  },
+  {
+    id: "tim-ferriss", 
+    name: "Tim Ferriss",
+    description: "Author and podcaster who optimizes performance and lifestyle design"
+  },
+  {
+    id: "satya-nadella",
+    name: "Satya Nadella", 
+    description: "CEO of Microsoft who leads through innovation and empathy"
+  },
+  {
+    id: "brené-brown",
+    name: "Brené Brown",
+    description: "Research professor who teaches courage and vulnerability in leadership"
+  },
+  {
+    id: "simon-sinek",
+    name: "Simon Sinek",
+    description: "Leadership expert who focuses on purpose and inspiration"
+  }
+];
+
+// GET /api/role-models - Returns suggested role models for new users
+app.get("/api/role-models", (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: SUGGESTED_ROLE_MODELS,
+      count: SUGGESTED_ROLE_MODELS.length
+    });
+  } catch (error) {
+    console.error("Error fetching role models:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch role models"
+    });
+  }
+});
 
 if (process.env.NODE_ENV === "production") {
   const clientDir = path.join(__dirname, "..", "dist");
