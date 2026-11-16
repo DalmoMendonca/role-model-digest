@@ -463,25 +463,7 @@ app.post("/api/role-model", requireAuth, async (req, res) => {
     }
   } catch (error) {
     console.error("Role model validation failed", error);
-    let message = "Role model validation unavailable";
-    const detail = typeof error?.detail === "string" ? error.detail : "";
-    const loweredDetail = detail.toLowerCase();
-    const loweredMessage =
-      typeof error?.message === "string" ? error.message.toLowerCase() : "";
-
-    if (error?.code === "SERPER_API_KEY_MISSING") {
-      message =
-        "Search provider key missing. Set SERPER_API_KEY to enable validation.";
-    } else if (error?.code === "SEARCH_PROVIDER_UNAVAILABLE") {
-      if (loweredDetail.includes("not enough credits") || loweredMessage.includes("not enough credits")) {
-        message =
-          "Search provider out of credits. Add Serper credits to continue.";
-      } else if (detail) {
-        message = `Search provider unavailable: ${detail}`;
-      } else {
-        message = "Search provider unavailable. Please try again shortly.";
-      }
-    }
+    const message = "We couldn't verify this person right now. Please try again shortly.";
 
     return res.status(503).json({ error: message });
   }

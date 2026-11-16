@@ -1,4 +1,5 @@
 import "../env.js";
+import { verifyPublicPerson } from "./personIdentityAgent.js";
 
 const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const WIKIDATA_ENABLED = process.env.ALLOW_WIKIDATA_LOOKUP !== "false";
@@ -74,7 +75,7 @@ async function fetchWikidataEntityId(name) {
   const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&limit=5&search=${encodeURIComponent(
     name
   )}`;
-  const response = await fetch(url, { method: "GET" });
+  const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(10000) });
   if (!response.ok) {
     throw new Error("Wikidata search failed");
   }
@@ -91,7 +92,7 @@ async function fetchWikidataEntityId(name) {
 
 async function fetchWikidataClaims(entityId) {
   const url = `https://www.wikidata.org/wiki/Special:EntityData/${entityId}.json`;
-  const response = await fetch(url, { method: "GET" });
+  const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(10000) });
   if (!response.ok) {
     throw new Error("Wikidata entity fetch failed");
   }
@@ -126,6 +127,28 @@ async function hasWikidataDeathDate(name) {
   }
 }
 
+async function wikidataIdentity(name) {
+  if (!WIKIDATA_ENABLED) return null;
+  try {
+    const id = await fetchWikidataEntityId(name);
+    if (!id) return null;
+    const claims = await fetchWikidataClaims(id);
+    const isHuman = (claims.P31 || []).some((claim) => claim.mainsnak?.datavalue?.value?.id === "Q5");
+    if (!isHuman) return {id, nonHuman:true};
+    return { id, deceased: Boolean(extractClaimValue(claims, "P570")) };
+  } catch { return null; }
+}
+
+async function independentValidation(name) {
+  const identity = await verifyPublicPerson(name);
+  if (identity.isPerson && identity.isLiving && identity.hasPublicPresence) return {ok:true,signals:{verifiedBy:"public-primary-sources",sources:identity.sources}};
+  if (identity.isPerson && identity.isLiving === false) return {ok:false,reason:"Role models must be living people. This person appears to have passed away."};
+  if (identity.isPerson === false) return {ok:false,reason:"Choose a living person rather than an organization or fictional character."};
+  const error=new Error("We couldn't verify this person right now. Please try again shortly.");
+  error.code="IDENTITY_VERIFICATION_UNAVAILABLE";
+  throw error;
+}
+
 async function serperSearch(query, endpoint, options = {}) {
   const body = {
     q: query,
@@ -142,7 +165,7 @@ async function serperSearch(query, endpoint, options = {}) {
       "Content-Type": "application/json",
       "X-API-KEY": SERPER_API_KEY
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body), signal: AbortSignal.timeout(15000)
   });
 
   if (!response.ok) {
@@ -230,11 +253,13 @@ export async function validateRoleModel({ name }) {
     return { ok: false, reason: "Role model name required." };
   }
 
-  if (!SERPER_API_KEY) {
-    const error = new Error("Serper API key is required for role model validation");
-    error.code = "SERPER_API_KEY_MISSING";
-    throw error;
+  const identity = await wikidataIdentity(normalizedName);
+  if (identity) {
+    if (identity.nonHuman) return {ok:false,reason:"Choose a living person rather than an organization or fictional character."};
+    if (identity.deceased) return {ok:false,reason:"Role models must be living people. This person appears to have passed away."};
+    return {ok:true,signals:{verifiedBy:"wikidata-human",entityId:identity.id}};
   }
+  if (!SERPER_API_KEY) return independentValidation(normalizedName);
 
   const [recentSearch, recentNews, deathSearch, profileSearch, wikidataDeath] = await Promise.all([
     safeSerperSearch(normalizedName, "search", { tbs: "qdr:y" }),
@@ -283,7 +308,8 @@ export async function validateRoleModel({ name }) {
     if (detail) {
       error.detail = detail;
     }
-    throw error;
+    console.warn("Paid identity search unavailable; using independent verification", {status:statusCode,detail});
+    return independentValidation(normalizedName);
   }
 
   if (serperFailures.length) {

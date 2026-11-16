@@ -119,3 +119,10 @@ The digest follows a person's own activity across their official website, author
 Run `node --test functions/tests/*.test.js`. Deploy both `api` and `weeklyDigests` after pipeline changes.
 
 `node functions/scripts/refreshCurrentDigests.js` performs a read-only inspection. Add `--apply` to regenerate missing/empty current-week issues with SMTP disabled, or `--apply --rebuild` to replace populated current-week issues too. `--role="Ken Wilber"` limits the run to one person. Backups are saved under ignored `.local/`. Populated opted-in results are queued for the normal Monday schedule. The script uses the signed-in gcloud account and is pinned to the production project.
+
+
+## Signup regression checks
+
+Run `node --test tests/onboarding.test.js` to verify that a newcomer sees an editable selection form without an existing role model. The page route reuses the canonical setup component rather than maintaining a separate empty-state implementation.
+
+Person verification can use a confirmed living-human Wikidata record without a paid search dependency. If unavailable, it retains the search checks and falls back to quoted public primary-source evidence. Deceased people and organizations remain ineligible; an unverifiable identity returns a retryable service error. Backend coverage is included in `node --test functions/tests/*.test.js`.
