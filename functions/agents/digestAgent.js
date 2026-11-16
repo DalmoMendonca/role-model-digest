@@ -2,7 +2,7 @@ import "../env.js";
 import crypto from "crypto";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
 
 const SOCIAL_DOMAINS = [
@@ -53,13 +53,20 @@ function pruneRoleModelRepeats(text, roleModelName) {
   });
 }
 
-function dedupeCandidates(candidates, previousKeys) {
+function sourceIdentity(item) {
+  let url = item.url || item.sourceUrl || "";
+  try { const parsed = new URL(url); parsed.hash=""; for(const key of [...parsed.searchParams.keys()]) if(key.startsWith("utm_")) parsed.searchParams.delete(key); url=parsed.toString().replace(/\/$/,""); } catch {}
+  if (item.activityKind === "upcoming") return `event:${url}|${item.date || item.sourceDate || ""}`;
+  if (item.activityKind === "ongoing") return `ongoing:${url}`;
+  return `url:${url}`;
+}
+
+function dedupeCandidates(candidates, previousKeys = []) {
   const seen = new Set(previousKeys);
   return candidates.filter((item) => {
-    const key = `${item.url || ""}|${item.title || ""}`.toLowerCase();
-    if (seen.has(key)) {
-      return false;
-    }
+    const key = sourceIdentity(item);
+    const legacy = `${item.url || ""}|${item.title || ""}`.toLowerCase();
+    if (seen.has(key) || seen.has(legacy)) return false;
     seen.add(key);
     return true;
   });
@@ -165,13 +172,7 @@ function buildFallback(candidates, roleModelName) {
   const items = safeCandidates
     .filter((item) => item && (item.title || item.url || item.snippet))
     .slice(0, 6)
-    .map((item) => ({
-      sourceTitle: item.title || item.url || "Update",
-      sourceUrl: item.url || "",
-      sourceType: item.sourceType || "web",
-      sourceDate: item.date || "",
-      summary: cleanSnippet(item.snippet) || "Update captured from the weekly scan."
-    }));
+    .map(mapCandidateToItem);
 
   return {
     summaryText: items.length
@@ -261,25 +262,19 @@ function mapCandidateToItem(candidate) {
     sourceUrl: candidate.url || "",
     sourceType: candidate.sourceType || "web",
     sourceDate: candidate.date || "",
-    summary: cleanSnippet(candidate.snippet) || "Update captured from the weekly scan."
+    summary: cleanSnippet(candidate.snippet) || "Update captured from the weekly scan.",
+    isOfficial: Boolean(candidate.isOfficial), activityKind: candidate.activityKind || "published",
+    sourceFingerprint: hashContent(candidate.snippet || "")
   };
 }
 
 export async function generateDigest({ roleModelName, weekStart, candidates, previousKeys }) {
+  const deduped = dedupeCandidates(candidates, previousKeys);
+  if (!deduped.length) throw new Error("Research incomplete: no undelivered verified material; broaden research and retry");
   if (!OPENAI_API_KEY) {
-    return buildFallback(candidates, roleModelName);
+    return buildFallback(deduped, roleModelName);
   }
 
-  let deduped = dedupeCandidates(candidates, previousKeys);
-  if (!deduped.length && Array.isArray(candidates) && candidates.length) {
-    console.warn(
-      `All candidates matched previous digest keys for ${roleModelName}; reusing current candidates instead of emitting an empty digest.`
-    );
-    deduped = candidates;
-  }
-  if (!deduped.length) {
-    return buildFallback([], roleModelName);
-  }
 
   const videoCandidates = deduped.filter(
     (item) => item.sourceType === "video" || isVideoUrl(item.url)
@@ -305,7 +300,7 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
               {
                 type: "input_text",
                 text:
-                  "You are a digest editor. Only include new, non-duplicative items. Return JSON only. Use only the provided candidates; do not invent new facts or sources. Include only substantive developments directly about the named person, their own activity or new coverage of their work. Exclude generic gift lists, incidental mentions, old retrospective articles and events at affiliated organizations unless the person is confirmed to personally participate. Return fewer items or an empty items array when evidence does not qualify."
+                  "You are a digest editor who helps a reader follow what their role model is doing and saying across their own channels. Only include new, non-duplicative items. Return JSON only. Use only the provided candidates; do not invent new facts or sources. Include only substantive developments directly about the named person, their own activity or new coverage of their work. Exclude generic gift lists, incidental mentions, old retrospective articles and events at affiliated organizations unless the person is confirmed to personally participate. Return fewer items or an empty items array when evidence does not qualify."
               }
             ]
           },
@@ -316,7 +311,7 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
                 type: "input_text",
                 text: `Role model: ${roleModelName}\nWeek starting: ${weekStart.toISOString()}\nCandidates: ${JSON.stringify(
                   deduped
-                )}\nReturn JSON with shape {summaryText: string, topics: string[], items: [{sourceTitle, sourceUrl, sourceType, sourceDate, summary}]}. summaryText must be ONE sentence (18-28 words) that synthesizes the week's dominant theme and names one specific event, decision, or statement from the candidates. Do not list multiple headlines, do not chain clauses with commas, and do not repeat the role model name more than once. Provide 3-5 topics (short noun phrases). Pick 6-10 items. If any candidates include sourceType \"video\" or YouTube links, include at least one video item. If any candidates include sourceType \"social\" or social links, include 1-3 social items.`
+                )}\nReturn JSON with shape {summaryText: string, topics: string[], items: [{sourceTitle, sourceUrl, sourceType, sourceDate, summary}]}. summaryText must be ONE sentence (18-28 words) that synthesizes the week's dominant theme and names one specific event, decision, or statement from the candidates. Do not list multiple headlines, do not chain clauses with commas, and do not repeat the role model name more than once. Provide 3-5 topics (short noun phrases). Pick up to 10 useful items. Prioritize the person’s own publications and concrete upcoming appearances over third-party news. Older undelivered material is catch-up: preserve its original date and never imply it was published this week. Upcoming dates are scheduled appearances, never events that already occurred. Undated ongoing activities are context, never fresh publication claims. If any candidates include sourceType \"video\" or YouTube links, include at least one video item. If any candidates include sourceType \"social\" or social links, include 1-3 social items.`
               }
             ]
           }
@@ -389,6 +384,11 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
     }
   }
 
+  for (const candidate of deduped.filter((item) => item.isOfficial && item.sourceType !== "social")) {
+    if (!items.some((item) => item.sourceUrl === candidate.url && item.sourceDate === candidate.date)) items.push(mapCandidateToItem(candidate));
+  }
+
+  items.sort((a,b) => Number(Boolean(deduped.find((candidate) => candidate.url === b.sourceUrl)?.isOfficial)) - Number(Boolean(deduped.find((candidate) => candidate.url === a.sourceUrl)?.isOfficial)));
   if (items.length > 12) {
     items = items.slice(0, 12);
   }
@@ -404,12 +404,20 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
         : isSocialUrl(sourceUrl)
         ? "social"
         : item.sourceType || "web";
+      const evidence = deduped.find((candidate) => candidate.url === sourceUrl && candidate.date === item.sourceDate) || deduped.find((candidate) => candidate.url === sourceUrl);
+      const date = evidence?.date || "";
+      const kind = evidence?.activityKind || "published";
+      const prefix = kind === "upcoming" ? `Upcoming ${date}: ` : kind === "published" && date && date < new Date(Date.now()-7*86400000).toISOString().slice(0,10) ? `Catch-up (published ${date}): ` : kind === "ongoing" ? "Current activity: " : "";
       return {
-        sourceTitle: item.sourceTitle,
+        sourceTitle: evidence?.title || item.sourceTitle,
         sourceUrl,
-        sourceType,
-        sourceDate: item.sourceDate,
-        summary: item.summary || "Update captured from the weekly scan.",
+        sourceType: evidence?.sourceType || sourceType,
+        sourceDate: date,
+        isOfficial: Boolean(evidence?.isOfficial),
+        activityKind: kind,
+        evidenceUrl: evidence?.evidenceUrl || sourceUrl,
+        sourceFingerprint: hashContent(evidence?.snippet || ""),
+        summary: prefix + (evidence?.isOfficial ? evidence.snippet : item.summary || evidence?.snippet || "Update captured from the weekly scan."),
         contentHash: hashContent(`${item.sourceTitle}|${item.summary}`)
       };
     })

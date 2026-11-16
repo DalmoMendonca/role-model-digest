@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { nanoid } from "nanoid";
 import { collectSources, fetchOfficialProfiles } from "./agents/sourceAgent.js";
 import { generateDigest } from "./agents/digestAgent.js";
+import { discoverPrimarySources } from "./agents/primarySourcesAgent.js";
 import { summarizeDigestItems } from "./agents/itemSummaryAgent.js";
 import { generateDigestSummary } from "./agents/digestSummaryAgent.js";
 import { sendDigestEmail } from "./email.js";
@@ -142,10 +143,13 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     (item) => `${item.source_url || ""}|${item.source_title || ""}`.toLowerCase()
   );
 
+  const primarySources = await discoverPrimarySources(roleModel.name);
+  const lastUseful = db.prepare("SELECT MAX(week_start) AS week_start FROM digest_weeks WHERE role_model_id = ? AND week_start <> ? AND id IN (SELECT digest_week_id FROM digest_items)").get(roleModel.id, weekStart);
+  const since = lastUseful?.week_start ? new Date(lastUseful.week_start) : new Date(Date.now()-30*86400000);
   const candidates = await collectSources({
     roleModelName: roleModel.name,
     weekStart: weekStartDate,
-    customSources
+    customSources, primarySources, since
   });
 
   const digest = await generateDigest({
@@ -154,6 +158,7 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     candidates,
     previousKeys
   });
+  if (!digest.items?.length) throw new Error("Research incomplete: editorial selection produced no verified material; retry required");
   try {
     digest.items = await summarizeDigestItems(digest.items || [], roleModel.name);
   } catch (error) {

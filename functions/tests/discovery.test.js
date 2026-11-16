@@ -44,7 +44,7 @@ test('total discovery outage rejects before creating or emailing a digest', asyn
 });
 
 test('web search accepts only observed URLs with dates in the reporting window', async t => {
- t.mock.method(globalThis,'fetch',async()=>web([item,{...item,url:'https://invented.example/'},{...item,date:'2001-01-01'},{...item,date:'2099-01-01'}]));
+ t.mock.method(globalThis,'fetch',async(url)=>String(url).includes('api.openai.com')?web([item,{...item,url:'https://invented.example/'}]):new Response(`<meta property="article:published_time" content="${today}T12:00:00Z">`));
  const items=await collectWebSources({roleModelName:'Jane Example',since});
  assert.equal(items.length,1);assert.equal(items[0].url,item.url);
 });

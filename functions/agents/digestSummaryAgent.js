@@ -2,7 +2,7 @@ import "../env.js";
 import { fetchSourceText } from "./sourceAgent.js";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
 const MAX_ITEMS = 10;
 const MAX_CONTENT_CHARS = 12000;
@@ -160,6 +160,12 @@ function isWeakSummary(text) {
   return generic.some((phrase) => lower.includes(phrase));
 }
 
+function labelCatchUp(summary, items) {
+  const isCatchUp = items.some((item) => /^Catch-up \(published /i.test(item.summary || ""));
+  if (!isCatchUp || /catch(?:ing)?[ -]?up/i.test(summary)) return summary;
+  return `Catch-up: ${summary.replace(/^This week,?\s*/i, "")}`;
+}
+
 export async function generateDigestSummary({ roleModelName, items }) {
   const safeItems = Array.isArray(items) ? items.slice(0, MAX_ITEMS) : [];
   if (!safeItems.length) {
@@ -167,12 +173,12 @@ export async function generateDigestSummary({ roleModelName, items }) {
   }
 
   if (!OPENAI_API_KEY) {
-    return buildFallbackSummary(safeItems, roleModelName);
+    return labelCatchUp(buildFallbackSummary(safeItems, roleModelName), safeItems);
   }
 
   const contexts = await Promise.all(
     safeItems.map(async (item, index) => {
-      const content = await fetchSourceText(item.sourceUrl, MAX_CONTENT_CHARS);
+      const content = item.isOfficial ? "" : await fetchSourceText(item.sourceUrl, MAX_CONTENT_CHARS);
       return {
         id: index,
         title: item.sourceTitle || "",
@@ -180,6 +186,7 @@ export async function generateDigestSummary({ roleModelName, items }) {
         sourceType: item.sourceType || "web",
         sourceDate: item.sourceDate || "",
         summary: item.summary || "",
+        activityKind: item.activityKind || "published",
         content: content || ""
       };
     })
@@ -200,7 +207,7 @@ export async function generateDigestSummary({ roleModelName, items }) {
             {
               type: "input_text",
               text:
-                "You are a weekly digest editor. Use only the provided item metadata and full content. Write one sentence (20-32 words) that synthesizes the week's dominant theme(s). Be specific and cite at least two concrete developments if present. Do not list headlines."
+                "You are a weekly digest editor helping a reader follow a person's work and activity. Use only the provided item metadata and public content. Respect original dates: older undelivered work is catch-up, upcoming events are scheduled and have not occurred, and ongoing channels are context. Never imply every item was published this week. Explicitly acknowledge catch-up or upcoming events when present. Write one sentence (20-32 words) that synthesizes the week's dominant theme(s). Be specific and cite at least two concrete developments if present. Do not list headlines."
             }
           ]
         },
@@ -223,7 +230,7 @@ export async function generateDigestSummary({ roleModelName, items }) {
   });
 
   if (!response.ok) {
-    return buildFallbackSummary(safeItems, roleModelName);
+    return labelCatchUp(buildFallbackSummary(safeItems, roleModelName), safeItems);
   }
 
   const data = await response.json();
@@ -231,7 +238,7 @@ export async function generateDigestSummary({ roleModelName, items }) {
   const parsed = safeJsonParse(content);
   const summaryText = parsed?.summaryText ? `${parsed.summaryText}`.trim() : "";
   if (isWeakSummary(summaryText)) {
-    return buildFallbackSummary(safeItems, roleModelName);
+    return labelCatchUp(buildFallbackSummary(safeItems, roleModelName), safeItems);
   }
-  return summaryText;
+  return labelCatchUp(summaryText, safeItems);
 }

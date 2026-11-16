@@ -2,10 +2,11 @@ import crypto from "crypto";
 import { nanoid } from "nanoid";
 import { collectSources, fetchOfficialProfiles } from "./agents/sourceAgent.js";
 import { generateDigest } from "./agents/digestAgent.js";
+import { discoverPrimarySources } from "./agents/primarySourcesAgent.js";
 import { summarizeDigestItems } from "./agents/itemSummaryAgent.js";
 import { generateDigestSummary } from "./agents/digestSummaryAgent.js";
 import { sendDigestEmail } from "./email.js";
-import { getWeekStart, toIsoDate } from "./utils/date.js";
+import { getWeekStart, toIsoDate, getCoverageStart } from "./utils/date.js";
 
 function hashContent(text) {
   return crypto.createHash("sha256").update(text).digest("hex");
@@ -172,7 +173,7 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
   const existingDoc = existingDocs.find((doc) => doc.weekStart === weekStart) || null;
   const wasCreated = !existingDoc;
 
-  if (existingDoc && !force) {
+  if (existingDoc && !force && existingDoc.items?.length) {
     if (existingDoc.emailPending && user.weeklyEmailOptIn && existingDoc.items?.length) {
       await deliverDigestEmail(db, user, roleModel.name, existingDoc);
     }
@@ -194,8 +195,7 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
   const sortedPrevious = existingDocs
     .slice()
     .filter((doc) => doc.weekStart !== weekStart)
-    .sort((a, b) => `${b.weekStart || ""}`.localeCompare(a.weekStart || ""))
-    .slice(0, 6);
+    .sort((a, b) => `${b.weekStart || ""}`.localeCompare(a.weekStart || ""));
   const previousKeys = [];
   sortedPrevious.forEach((doc) => {
     const items = Array.isArray(doc.items) ? doc.items : [];
@@ -203,13 +203,36 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
       previousKeys.push(
         `${item.sourceUrl || ""}|${item.sourceTitle || ""}`.toLowerCase()
       );
+      let url = item.sourceUrl || "";
+      try { const parsed=new URL(url); parsed.hash=""; for(const key of [...parsed.searchParams.keys()]) if(key.startsWith("utm_")) parsed.searchParams.delete(key); url=parsed.toString().replace(/\/$/,""); } catch {}
+      previousKeys.push(item.activityKind === "upcoming" ? `event:${url}|${item.sourceDate || ""}` : item.activityKind === "ongoing" ? `ongoing:${url}` : `url:${url}`);
     });
   });
 
+  const roleRef = db.collection("roleModels").doc(roleModel.id);
+  const savedRole = await roleRef.get();
+  const sourceState = savedRole.exists ? savedRole.data() : {};
+  let primarySources = sourceState.monitorSources || [];
+  const sourceAge = Date.now() - Date.parse(sourceState.monitorSourcesCheckedAt || "2000-01-01");
+  if (!primarySources.length || sourceAge > 30 * 86400000) {
+    try {
+      const discovered = await discoverPrimarySources(roleModel.name, sourceState.bioText || "");
+      if (discovered.length) {
+        primarySources = [...new Map([...primarySources,...discovered].map((source) => [source.url.replace(/\/$/,""),source])).values()].slice(0,6);
+        await roleRef.set({monitorSources:primarySources,monitorSourcesCheckedAt:new Date().toISOString()}, {merge:true});
+      }
+    } catch (error) {
+      console.error(`Publishing-channel discovery failed: ${error.message}`);
+    }
+  }
+  // Empty weeks never advance the catch-up boundary. First-time users receive
+  // recent work; an interrupted subscription recovers from its last useful issue.
+  const reportingStart = getCoverageStart(existingDocs, weekStart);
+  const sourceReport = {};
   const candidates = await collectSources({
     roleModelName: roleModel.name,
     weekStart: weekStartDate,
-    customSources
+    customSources, primarySources, since:reportingStart, sourceReport
   });
 
   const digest = await generateDigest({
@@ -219,6 +242,7 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     previousKeys
   });
 
+  if (!digest.items?.length) throw new Error("Research incomplete: editorial selection produced no verified material; retry required");
   try {
     digest.items = await summarizeDigestItems(digest.items || [], roleModel.name);
   } catch (error) {
@@ -251,7 +275,7 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
   const cleanedItems = [];
   for (const item of digest.items || []) {
     const normalizedUrl = (item.sourceUrl || "").trim();
-    const key = normalizedUrl.toLowerCase();
+    const key = normalizedUrl.toLowerCase() + (item.activityKind === "upcoming" ? `|${item.sourceDate}` : "");
     if (key && seenUrls.has(key)) continue;
     if (key) seenUrls.add(key);
     cleanedItems.push({
@@ -265,6 +289,7 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     });
   }
 
+  if (!cleanedItems.length) throw new Error("Research incomplete: editorial selection produced no verified material; retry required");
   const digestId = existingDoc ? existingDoc.id : nanoid();
   const digestPayload = {
     id: digestId,
@@ -274,9 +299,11 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     topics: Array.isArray(digest.topics) ? digest.topics : [],
     takeaways: Array.isArray(digest.takeaways) ? digest.takeaways : [],
     generatedAt: new Date().toISOString(),
+    coverageSince: reportingStart.toISOString(),
+    sourceCoverage: {pagesChecked:sourceReport.pagesChecked || [], successfulReads:sourceReport.successfulReads || 0, errors:sourceReport.errors || []},
     items: cleanedItems,
     emailPending: Boolean(user.weeklyEmailOptIn && cleanedItems.length),
-    ...(cleanedItems.length ? {} : { emailSkippedReason: "no_updates" })
+    emailSkippedReason: cleanedItems.length ? null : "no_updates"
   };
 
   await db.collection("digests").doc(digestId).set(digestPayload, { merge: true });

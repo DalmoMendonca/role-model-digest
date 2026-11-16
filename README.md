@@ -105,15 +105,17 @@ Server / Functions (optional but recommended):
 ## Why this stands out
 Role Model Digest is a layered signal-processing system that fuses search intelligence, LLM structure, and social context into one weekly digest. Every layer has guardrails, fallbacks, and clear data ownership.
 
-## Digest recovery and verification
+## Digest discovery, recovery and verification
 
-Functions run on Node.js 22. Deploy both `api` and `weeklyDigests` after pipeline changes.
+The digest follows a person's own activity across their official website, author-specific publication feeds, newsletters, public channels and scheduled appearances. News search supplements those channels.
 
-- Serper searches retain partial successes. When results are unavailable or sparse, dated Google News RSS and OpenAI web search provide independent discovery paths.
-- OpenAI search uses `OPENAI_SEARCH_MODEL` (default `gpt-4.1-mini`) and the existing server-side OpenAI key. Accepted search items require observed source URLs and dates within the last seven days.
-- Discovery outages abort generation before persistence or email. Genuine empty digests remain visible on the site and do not generate email.
-- The weekly job has a 30-minute limit and retries twice. Pending email is cleared only after successful SMTP delivery; completed digests are reused on retry.
+- Publishing channels are stored per role model as `monitorSources`, checked directly on every run, and supplemented by periodic source discovery. Existing verified channels survive discovery refreshes.
+- An unsuccessful research run never advances the catch-up boundary. Recovery scans start at the last useful issue; first-time users start with 30 days. Original publication dates remain visible, and older undelivered material is labeled catch-up.
+- Concrete upcoming appearances within 30 days are labeled as scheduled, rather than presented as events that occurred. Public publisher descriptions and announcements are sufficient to link subscription material; locked contents are not summarized.
+- Source URLs, publication dates and quoted page evidence are validated. Author-specific RSS includes a person's work even when their name is absent from a headline. Previously delivered sources are not recycled when searches return only duplicates.
+- Partial search successes survive other provider failures. Google News RSS and OpenAI search supplement direct sources when Serper credits are unavailable. Three targeted web searches cover news, statements, interviews and public posts when paid search is unavailable. Verified public social archives preserve original author links and post timestamps.
+- Functions run on Node.js 22. The weekly job has a 30-minute limit and retries twice. Pending email clears only after successful delivery; zero verified results are an incomplete research run that retries and fails visibly, never a successful quiet week.
 
-Run regression checks with `node --test functions/tests/discovery.test.js`.
+Run `node --test functions/tests/*.test.js`. Deploy both `api` and `weeklyDigests` after pipeline changes.
 
-For a read-only inspection of missing/empty current-week digests, run `node functions/scripts/refreshCurrentDigests.js`. Add `--apply` to regenerate them with SMTP disabled. Existing records are backed up under ignored `.local/`; populated digests are skipped. Opted-in, populated results are marked pending for the regular Monday schedule, rather than sent during maintenance. The script uses the signed-in gcloud account and is pinned to the Role Model Digest production project.
+`node functions/scripts/refreshCurrentDigests.js` performs a read-only inspection. Add `--apply` to regenerate missing/empty current-week issues with SMTP disabled, or `--apply --rebuild` to replace populated current-week issues too. `--role="Ken Wilber"` limits the run to one person. Backups are saved under ignored `.local/`. Populated opted-in results are queued for the normal Monday schedule. The script uses the signed-in gcloud account and is pinned to the production project.

@@ -50,6 +50,7 @@ export async function summarizeDigestItems(items, roleModelName) {
 
   const contexts = await Promise.all(
     items.map(async (item, index) => {
+      if (item.isOfficial) return null;
       const shouldSummarize =
         item.sourceType === "news" ||
         item.sourceType === "web" ||

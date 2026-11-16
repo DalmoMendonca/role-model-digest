@@ -1652,7 +1652,7 @@ app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
   return res.json({ status: "ok" });
 });
 
-export const api = onRequest({ timeoutSeconds: 300 }, app);
+export const api = onRequest({ timeoutSeconds: 540 }, app);
 
 export const weeklyDigests = onSchedule(
   {
