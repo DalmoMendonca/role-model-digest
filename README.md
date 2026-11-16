@@ -104,3 +104,16 @@ Server / Functions (optional but recommended):
 
 ## Why this stands out
 Role Model Digest is a layered signal-processing system that fuses search intelligence, LLM structure, and social context into one weekly digest. Every layer has guardrails, fallbacks, and clear data ownership.
+
+## Digest recovery and verification
+
+Functions run on Node.js 22. Deploy both `api` and `weeklyDigests` after pipeline changes.
+
+- Serper searches retain partial successes. When results are unavailable or sparse, dated Google News RSS and OpenAI web search provide independent discovery paths.
+- OpenAI search uses `OPENAI_SEARCH_MODEL` (default `gpt-4.1-mini`) and the existing server-side OpenAI key. Accepted search items require observed source URLs and dates within the last seven days.
+- Discovery outages abort generation before persistence or email. Genuine empty digests remain visible on the site and do not generate email.
+- The weekly job has a 30-minute limit and retries twice. Pending email is cleared only after successful SMTP delivery; completed digests are reused on retry.
+
+Run regression checks with `node --test functions/tests/discovery.test.js`.
+
+For a read-only inspection of missing/empty current-week digests, run `node functions/scripts/refreshCurrentDigests.js`. Add `--apply` to regenerate them with SMTP disabled. Existing records are backed up under ignored `.local/`; populated digests are skipped. Opted-in, populated results are marked pending for the regular Monday schedule, rather than sent during maintenance. The script uses the signed-in gcloud account and is pinned to the Role Model Digest production project.

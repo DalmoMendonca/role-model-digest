@@ -32,14 +32,117 @@ function safeJsonParse(text) {
   }
 }
 
-function buildFallbackSummary(items, roleModelName) {
-  const primary = items.find((item) => item?.summary || item?.sourceTitle);
-  if (!primary) {
-    return `This week focused on a quiet signal for ${roleModelName}.`;
+function cleanTitle(value) {
+  return `${value || ""}`
+    .replace(/\s+-\s+[^-]{2,40}$/g, "")
+    .replace(/\s+\|\s+[^|]{2,40}$/g, "")
+    .replace(/(\.\.\.|…)+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const FALLBACK_STOPWORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "also",
+  "amid",
+  "around",
+  "because",
+  "before",
+  "being",
+  "could",
+  "during",
+  "first",
+  "from",
+  "have",
+  "into",
+  "latest",
+  "more",
+  "news",
+  "over",
+  "public",
+  "says",
+  "than",
+  "that",
+  "their",
+  "there",
+  "they",
+  "this",
+  "update",
+  "updates",
+  "week",
+  "were",
+  "what",
+  "when",
+  "where",
+  "which",
+  "while",
+  "with",
+  "would"
+]);
+
+function extractFallbackTopics(items, roleModelName) {
+  const nameTokens = new Set(
+    `${roleModelName || ""}`
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+  );
+  const counts = new Map();
+  const firstSeen = new Map();
+  let index = 0;
+
+  for (const item of items.slice(0, MAX_ITEMS)) {
+    const text = `${item.sourceTitle || ""} ${item.summary || ""}`.toLowerCase();
+    const words = text.match(/[a-z][a-z0-9'-]{3,}/g) || [];
+    for (const rawWord of words) {
+      const word = rawWord.replace(/^'+|'+$/g, "");
+      if (!word || FALLBACK_STOPWORDS.has(word) || nameTokens.has(word)) continue;
+      if (!firstSeen.has(word)) firstSeen.set(word, index++);
+      counts.set(word, (counts.get(word) || 0) + 1);
+    }
   }
-  const title = primary.sourceTitle || roleModelName;
-  const summary = primary.summary ? ` ${primary.summary}` : "";
-  return `This week focused on ${title}.${summary}`.trim();
+
+  return [...counts.entries()]
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      return firstSeen.get(a[0]) - firstSeen.get(b[0]);
+    })
+    .slice(0, 4)
+    .map(([word]) => word);
+}
+
+function formatTopicList(topics) {
+  if (topics.length <= 1) return topics[0] || "recent coverage";
+  if (topics.length === 2) return `${topics[0]} and ${topics[1]}`;
+  return `${topics.slice(0, -1).join(", ")}, and ${topics.at(-1)}`;
+}
+
+function buildFallbackSummary(items, roleModelName) {
+  const topics = extractFallbackTopics(Array.isArray(items) ? items : [], roleModelName);
+  if (topics.length) {
+    return `This week surfaced ${roleModelName} updates around ${formatTopicList(topics)}.`;
+  }
+
+  const titles = (Array.isArray(items) ? items : [])
+    .map((item) => cleanTitle(item?.sourceTitle || ""))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (!titles.length) {
+    return `No substantive public updates were found for ${roleModelName} this week.`;
+  }
+
+  if (titles.length === 1) {
+    return `This week surfaced a public update about ${roleModelName}: ${titles[0]}.`;
+  }
+
+  const [first, second, third] = titles;
+  return `This week surfaced ${roleModelName} updates around ${first} and ${second}${
+    third ? `, with additional coverage of ${third}` : ""
+  }.`;
 }
 
 function isWeakSummary(text) {
@@ -47,7 +150,13 @@ function isWeakSummary(text) {
   if (!trimmed) return true;
   if (trimmed.split(/\s+/).length < 12) return true;
   const lower = trimmed.toLowerCase();
-  const generic = ["latest updates", "fresh mentions", "public updates", "mixed signals"];
+  const generic = [
+    "latest updates",
+    "fresh mentions",
+    "public updates",
+    "mixed signals",
+    "quiet signal"
+  ];
   return generic.some((phrase) => lower.includes(phrase));
 }
 

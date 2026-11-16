@@ -65,6 +65,101 @@ function dedupeCandidates(candidates, previousKeys) {
   });
 }
 
+function cleanTitle(value) {
+  return `${value || ""}`
+    .replace(/\s+-\s+[^-]{2,40}$/g, "")
+    .replace(/\s+\|\s+[^|]{2,40}$/g, "")
+    .replace(/(\.\.\.|…)+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanSnippet(value) {
+  return `${value || ""}`
+    .replace(/(\.\.\.|…)+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const FALLBACK_STOPWORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "also",
+  "amid",
+  "around",
+  "because",
+  "before",
+  "being",
+  "could",
+  "during",
+  "first",
+  "from",
+  "have",
+  "into",
+  "latest",
+  "more",
+  "news",
+  "over",
+  "public",
+  "says",
+  "than",
+  "that",
+  "their",
+  "there",
+  "they",
+  "this",
+  "update",
+  "updates",
+  "week",
+  "were",
+  "what",
+  "when",
+  "where",
+  "which",
+  "while",
+  "with",
+  "would"
+]);
+
+function extractFallbackTopics(candidates, roleModelName) {
+  const nameTokens = new Set(
+    `${roleModelName || ""}`
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+  );
+  const counts = new Map();
+  const firstSeen = new Map();
+  let index = 0;
+
+  for (const item of candidates.slice(0, 10)) {
+    const text = `${item.title || ""} ${item.snippet || ""}`.toLowerCase();
+    const words = text.match(/[a-z][a-z0-9'-]{3,}/g) || [];
+    for (const rawWord of words) {
+      const word = rawWord.replace(/^'+|'+$/g, "");
+      if (!word || FALLBACK_STOPWORDS.has(word) || nameTokens.has(word)) continue;
+      if (!firstSeen.has(word)) firstSeen.set(word, index++);
+      counts.set(word, (counts.get(word) || 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      return firstSeen.get(a[0]) - firstSeen.get(b[0]);
+    })
+    .slice(0, 4)
+    .map(([word]) => word);
+}
+
+function formatTopicList(topics) {
+  if (topics.length <= 1) return topics[0] || "recent coverage";
+  if (topics.length === 2) return `${topics[0]} and ${topics[1]}`;
+  return `${topics.slice(0, -1).join(", ")}, and ${topics.at(-1)}`;
+}
+
 function buildFallback(candidates, roleModelName) {
   const safeCandidates = Array.isArray(candidates) ? candidates : [];
   const items = safeCandidates
@@ -75,14 +170,14 @@ function buildFallback(candidates, roleModelName) {
       sourceUrl: item.url || "",
       sourceType: item.sourceType || "web",
       sourceDate: item.date || "",
-      summary: item.snippet || "Update captured from the weekly scan."
+      summary: cleanSnippet(item.snippet) || "Update captured from the weekly scan."
     }));
 
   return {
     summaryText: items.length
       ? buildThemeFromCandidates(safeCandidates, roleModelName)
-      : `This week focused on a quiet signal for ${roleModelName}.`,
-    topics: items.length ? ["weekly signal", "coverage"] : ["quiet week"],
+      : `No substantive public updates were found for ${roleModelName} this week.`,
+    topics: items.length ? ["weekly coverage", "public updates"] : ["no substantive updates"],
     takeaways: [],
     items
   };
@@ -116,7 +211,7 @@ function extractOutputText(data) {
 function normalizeSummary(text, roleModelName) {
   const trimmed = `${text || ""}`.trim();
   if (!trimmed) {
-    return `This week focused on a scan of ${roleModelName}'s latest signals.`;
+    return `No substantive public updates were found for ${roleModelName} this week.`;
   }
   return pruneRoleModelRepeats(trimmed, roleModelName);
 }
@@ -137,40 +232,27 @@ function buildThemeFromCandidates(candidates, roleModelName) {
 
   const lead = ranked[0];
   if (!lead) {
-    return `This week focused on a scan of ${roleModelName}'s latest signals.`;
+    return `No substantive public updates were found for ${roleModelName} this week.`;
   }
 
-  const title = `${lead.title || lead.url || roleModelName}`.trim();
-  const snippet = `${lead.snippet || ""}`.trim();
-  const snippetSentence = snippet
-    ? snippet.replace(/[.!?]+$/, "")
-    : "";
-  const cleanedSnippet = pruneRoleModelRepeats(snippetSentence || "", roleModelName);
-
-  let sentence = `This week focused on ${title}`;
-  if (cleanedSnippet) {
-    const firstWord = cleanedSnippet.split(/\s+/)[0]?.toLowerCase() || "";
-    const nameStart = roleModelName
-      ? cleanedSnippet.toLowerCase().startsWith(roleModelName.toLowerCase())
-      : false;
-    const connector =
-      nameStart || ["they", "he", "she", "the"].includes(firstWord) ? "as" : "with";
-    const shouldLower = ["they", "he", "she", "the", "a", "an"].includes(firstWord);
-    const snippetClause = shouldLower
-      ? cleanedSnippet.charAt(0).toLowerCase() + cleanedSnippet.slice(1)
-      : cleanedSnippet;
-    sentence = `${sentence}, ${connector} ${snippetClause}.`;
-  } else {
-    sentence = `${sentence}.`;
+  const topics = extractFallbackTopics(ranked, roleModelName);
+  if (topics.length) {
+    return `This week surfaced ${roleModelName} updates around ${formatTopicList(topics)}.`;
   }
 
-  if (sentence.length > 180) {
-    const trimmed = sentence.slice(0, 177);
-    const cutoff = trimmed.lastIndexOf(" ");
-    return `${trimmed.slice(0, cutoff > 120 ? cutoff : 177)}...`;
+  const titles = ranked
+    .map((item) => cleanTitle(item.title || item.url || "update"))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (titles.length === 1) {
+    return `This week surfaced a public update about ${roleModelName}: ${titles[0]}.`;
   }
 
-  return sentence;
+  const [first, second, third] = titles;
+  return `This week surfaced ${roleModelName} updates around ${first} and ${second}${
+    third ? `, with additional coverage of ${third}` : ""
+  }.`;
 }
 
 function mapCandidateToItem(candidate) {
@@ -179,7 +261,7 @@ function mapCandidateToItem(candidate) {
     sourceUrl: candidate.url || "",
     sourceType: candidate.sourceType || "web",
     sourceDate: candidate.date || "",
-    summary: candidate.snippet || "Update captured from the weekly scan."
+    summary: cleanSnippet(candidate.snippet) || "Update captured from the weekly scan."
   };
 }
 
@@ -188,7 +270,13 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
     return buildFallback(candidates, roleModelName);
   }
 
-  const deduped = dedupeCandidates(candidates, previousKeys);
+  let deduped = dedupeCandidates(candidates, previousKeys);
+  if (!deduped.length && Array.isArray(candidates) && candidates.length) {
+    console.warn(
+      `All candidates matched previous digest keys for ${roleModelName}; reusing current candidates instead of emitting an empty digest.`
+    );
+    deduped = candidates;
+  }
   if (!deduped.length) {
     return buildFallback([], roleModelName);
   }
@@ -217,7 +305,7 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
               {
                 type: "input_text",
                 text:
-                  "You are a digest editor. Only include new, non-duplicative items. Return JSON only. Use only the provided candidates; do not invent new facts or sources."
+                  "You are a digest editor. Only include new, non-duplicative items. Return JSON only. Use only the provided candidates; do not invent new facts or sources. Include only substantive developments directly about the named person, their own activity or new coverage of their work. Exclude generic gift lists, incidental mentions, old retrospective articles and events at affiliated organizations unless the person is confirmed to personally participate. Return fewer items or an empty items array when evidence does not qualify."
               }
             ]
           },
@@ -234,7 +322,7 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
           }
         ],
         temperature: 0.4,
-        max_output_tokens: 800,
+        max_output_tokens: 3000,
         text: { format: { type: "json_object" } }
       })
     });
@@ -268,7 +356,9 @@ export async function generateDigest({ roleModelName, weekStart, candidates, pre
     : [];
   const takeaways = [];
 
-  let items = Array.isArray(parsed.items) ? parsed.items : [];
+  const candidateUrls = new Set(deduped.map((item) => item.url));
+  let items = (Array.isArray(parsed.items) ? parsed.items : []).filter((item) => item && candidateUrls.has(item.sourceUrl));
+  if (!items.length && parsed.items?.length && deduped.length) return buildFallback(deduped, roleModelName);
   const itemsByUrl = new Set(
     items.map((item) => (item?.sourceUrl || "").toLowerCase()).filter(Boolean)
   );

@@ -133,9 +133,10 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
       FROM digest_items
       INNER JOIN digest_weeks ON digest_items.digest_week_id = digest_weeks.id
       WHERE digest_weeks.role_model_id = ?
+        AND (? = 0 OR digest_weeks.week_start <> ?)
     `
     )
-    .all(roleModel.id);
+    .all(roleModel.id, force ? 1 : 0, weekStart);
 
   const previousKeys = previousItems.map(
     (item) => `${item.source_url || ""}|${item.source_title || ""}`.toLowerCase()
@@ -246,7 +247,7 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     );
   }
 
-  if (user.weekly_email_opt_in) {
+  if (user.weekly_email_opt_in && (digest.items || []).length) {
     const clientOrigin = getClientOrigin();
     const digestUrl = buildDigestShareUrl(clientOrigin, digestId);
     const socialUrl = `${clientOrigin}/social`;

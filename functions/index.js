@@ -1652,11 +1652,14 @@ app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
   return res.json({ status: "ok" });
 });
 
-export const api = onRequest(app);
+export const api = onRequest({ timeoutSeconds: 300 }, app);
 
 export const weeklyDigests = onSchedule(
   {
     schedule: "0 9 * * 1",
+    timeoutSeconds: 1800,
+    retryCount: 2,
+    minBackoffSeconds: 60,
     timeZone: process.env.CRON_TIMEZONE || "America/Chicago"
   },
   async () => {
@@ -1712,5 +1715,8 @@ export const weeklyDigests = onSchedule(
     console.log(
       `[weeklyDigests] Done — success: ${results.success}, skipped: ${results.skipped}, failed: ${results.failed}`
     );
+    if (results.failed) {
+      throw new Error(`Weekly digest generation failed for ${results.failed} role models; completed digests will be skipped on retry`);
+    }
   }
 );

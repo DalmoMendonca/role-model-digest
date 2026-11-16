@@ -173,6 +173,9 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
   const wasCreated = !existingDoc;
 
   if (existingDoc && !force) {
+    if (existingDoc.emailPending && user.weeklyEmailOptIn && existingDoc.items?.length) {
+      await deliverDigestEmail(db, user, roleModel.name, existingDoc);
+    }
     return {
       digests: await getDigestsForRoleModel(db, roleModel.id),
       digestId: existingDoc.id,
@@ -190,6 +193,7 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
 
   const sortedPrevious = existingDocs
     .slice()
+    .filter((doc) => doc.weekStart !== weekStart)
     .sort((a, b) => `${b.weekStart || ""}`.localeCompare(a.weekStart || ""))
     .slice(0, 6);
   const previousKeys = [];
@@ -270,40 +274,15 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     topics: Array.isArray(digest.topics) ? digest.topics : [],
     takeaways: Array.isArray(digest.takeaways) ? digest.takeaways : [],
     generatedAt: new Date().toISOString(),
-    items: cleanedItems
+    items: cleanedItems,
+    emailPending: Boolean(user.weeklyEmailOptIn && cleanedItems.length),
+    ...(cleanedItems.length ? {} : { emailSkippedReason: "no_updates" })
   };
 
   await db.collection("digests").doc(digestId).set(digestPayload, { merge: true });
 
-  if (user.weeklyEmailOptIn) {
-    const clientOrigin = getClientOrigin();
-    const digestUrl = buildDigestShareUrl(clientOrigin, digestId);
-    const socialUrl = `${clientOrigin}/social`;
-    const html = buildDigestEmailHtml(roleModel.name, digestPayload, {
-      digestUrl,
-      socialUrl,
-      weekStart
-    });
-    const subject = `Your ${roleModel.name} digest for the week of ${weekStart}`;
-    const text = buildDigestEmailText(roleModel.name, digestPayload, {
-      digestUrl,
-      socialUrl,
-      weekStart
-    });
-
-    try {
-      await sendDigestEmail({
-        to: user.email,
-        subject,
-        html,
-        text
-      });
-      await db.collection("digests").doc(digestId).update({
-        emailSentAt: new Date().toISOString()
-      });
-    } catch (error) {
-      // Swallow email failures to keep digest creation intact.
-    }
+  if (user.weeklyEmailOptIn && cleanedItems.length) {
+    await deliverDigestEmail(db, user, roleModel.name, digestPayload);
   }
 
   return {
@@ -312,6 +291,25 @@ export async function generateWeeklyDigest(db, { user, roleModel, force = false 
     weekStart,
     wasCreated
   };
+}
+
+
+async function deliverDigestEmail(db, user, roleModelName, digest) {
+  const origin = getClientOrigin();
+  const options = {
+    digestUrl: buildDigestShareUrl(origin, digest.id),
+    socialUrl: `${origin}/social`, weekStart: digest.weekStart
+  };
+  const result = await sendDigestEmail({
+    to: user.email,
+    subject: `Your ${roleModelName} digest for the week of ${digest.weekStart}`,
+    html: buildDigestEmailHtml(roleModelName, digest, options),
+    text: buildDigestEmailText(roleModelName, digest, options)
+  });
+  if (result?.status === "skipped") throw new Error("Digest email transport is not configured");
+  await db.collection("digests").doc(digest.id).update({
+    emailSentAt: new Date().toISOString(), emailPending: false
+  });
 }
 
 function buildDigestEmailHtml(roleModelName, digest, options) {

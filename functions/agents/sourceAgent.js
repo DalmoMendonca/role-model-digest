@@ -1,4 +1,6 @@
 import "../env.js";
+import { collectWebSources } from "./webSearchAgent.js";
+import { collectNewsFeed } from "./newsFeedAgent.js";
 
 const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const DEFAULT_WEEKLY_TBS = "qdr:w";
@@ -95,6 +97,65 @@ function normalizeNameTokens(name) {
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .filter(Boolean);
+}
+
+function compactText(value) {
+  return `${value || ""}`.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function buildNameAliases(roleModelName) {
+  const tokens = normalizeNameTokens(roleModelName);
+  const meaningful = tokens.filter((token) => token.length > 1);
+  const compactName = tokens.join("");
+  const aliases = new Set([compactName]);
+
+  if (meaningful.length) {
+    aliases.add(meaningful.join(""));
+  }
+  if (tokens.length > 1) {
+    aliases.add(`${tokens.slice(0, -1).map((token) => token[0] || "").join("")}${tokens.at(-1)}`);
+  }
+
+  return {
+    aliases: [...aliases].filter(Boolean),
+    meaningful
+  };
+}
+
+function isOfficialProfileUrl(url, profiles) {
+  const lowerUrl = (url || "").toLowerCase();
+  const checks = [
+    ["x.com", profiles.twitter],
+    ["twitter.com", profiles.twitter],
+    ["instagram.com", profiles.instagram],
+    ["facebook.com", profiles.facebook],
+    ["linkedin.com", profiles.linkedin],
+    ["tiktok.com", profiles.tiktok],
+    ["youtube.com", profiles.youtubeUsername]
+  ];
+
+  return checks.some(([domain, handle]) => {
+    if (!handle) return false;
+    return lowerUrl.includes(`${domain}/${handle.toLowerCase()}`);
+  });
+}
+
+function isRelevantDigestSource(item, roleModelName, profiles) {
+  if (item.sourceType === "custom") return true;
+  if (isOfficialProfileUrl(item.url, profiles)) return true;
+
+  const text = compactText(`${item.title || ""} ${item.snippet || ""} ${item.url || ""}`);
+  const { aliases, meaningful } = buildNameAliases(roleModelName);
+
+  if (aliases.some((alias) => alias.length >= 3 && text.includes(alias))) {
+    return true;
+  }
+
+  if (meaningful.length >= 2 && meaningful.every((token) => text.includes(token))) {
+    return true;
+  }
+
+  return meaningful.length === 1 && meaningful[0].length >= 4 && text.includes(meaningful[0]);
 }
 
 function scoreBioSource(item, nameTokens, fullName) {
@@ -266,6 +327,7 @@ async function fetchOpenGraphImage(pageUrl) {
   try {
     const response = await fetch(pageUrl, {
       method: "GET",
+      signal: AbortSignal.timeout(10000),
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -448,11 +510,14 @@ async function serperSearch(query, endpoint, options = {}) {
       "Content-Type": "application/json",
       "X-API-KEY": SERPER_API_KEY
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000)
   });
 
   if (!response.ok) {
-    throw new Error("Search provider error");
+    const error = new Error(`Search provider returned HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
 
   return response.json();
@@ -462,7 +527,7 @@ async function fetchWikidataEntityId(name) {
   const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&limit=5&search=${encodeURIComponent(
     name
   )}`;
-  const response = await fetch(url, { method: "GET" });
+  const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(10000) });
   if (!response.ok) {
     throw new Error("Wikidata search failed");
   }
@@ -479,7 +544,7 @@ async function fetchWikidataEntityId(name) {
 
 async function fetchWikidataClaims(entityId) {
   const url = `https://www.wikidata.org/wiki/Special:EntityData/${entityId}.json`;
-  const response = await fetch(url, { method: "GET" });
+  const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(10000) });
   if (!response.ok) {
     throw new Error("Wikidata entity fetch failed");
   }
@@ -596,7 +661,7 @@ async function fetchCustomSource(url) {
     return `Custom source: ${url}`;
   }
   try {
-    const response = await fetch(url, { method: "GET" });
+    const response = await fetch(url, { method: "GET", signal: AbortSignal.timeout(10000) });
     const html = await response.text();
     const text = html.replace(/<[^>]+>/g, " ");
     return sanitizeSnippet(text.slice(0, 360));
@@ -612,6 +677,7 @@ export async function fetchSourceText(url, maxChars = MAX_SOURCE_TEXT) {
   try {
     const response = await fetch(url, {
       method: "GET",
+      signal: AbortSignal.timeout(10000),
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -636,7 +702,7 @@ async function fetchYouTubeFeed(channelId, weekStart) {
     const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(
       channelId
     )}`;
-    const response = await fetch(feedUrl, { method: "GET" });
+    const response = await fetch(feedUrl, { method: "GET", signal: AbortSignal.timeout(10000) });
     if (!response.ok) return [];
     const xml = await response.text();
     const entries = xml.match(/<entry>[\s\S]*?<\/entry>/g) || [];
@@ -682,6 +748,8 @@ function dedupeByUrl(items) {
 
 export async function collectSources({ roleModelName, weekStart, customSources = [] }) {
   const items = [];
+  const reportingStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  let successfulSearches = 0;
   let news = { news: [] };
   let search = { organic: [] };
   let social = { organic: [] };
@@ -729,7 +797,7 @@ export async function collectSources({ roleModelName, weekStart, customSources =
       }
       const videoQuery = videoQueries.join(" OR ");
 
-      [news, search, social, videos] = await Promise.all([
+      const results = await Promise.allSettled([
         serperSearch(`${roleModelName} update`, "news", { tbs: "qdr:w" }),
         serperSearch(`${roleModelName} interview OR statement OR "thread"`, "search", {
           tbs: "qdr:w"
@@ -737,6 +805,15 @@ export async function collectSources({ roleModelName, weekStart, customSources =
         serperSearch(socialQuery, "search", { tbs: "qdr:w" }),
         serperSearch(videoQuery, "search", { tbs: "qdr:w" })
       ]);
+      const defaults = [{ news: [] }, { organic: [] }, { organic: [] }, { organic: [] }];
+      [news, search, social, videos] = results.map((result, index) => {
+        if (result.status === "fulfilled") {
+          successfulSearches++;
+          return result.value;
+        }
+        console.warn(`Source search ${index} failed: ${result.reason?.message || "unknown error"}`);
+        return defaults[index];
+      });
     } catch (error) {
       console.warn("Source collection failed", error);
     }
@@ -783,7 +860,7 @@ export async function collectSources({ roleModelName, weekStart, customSources =
     }));
 
   if (officialProfiles.youtubeChannelId) {
-    const feedVideos = await fetchYouTubeFeed(officialProfiles.youtubeChannelId, weekStart);
+    const feedVideos = await fetchYouTubeFeed(officialProfiles.youtubeChannelId, reportingStart);
     if (feedVideos.length) {
       videoItems = dedupeByUrl([...videoItems, ...feedVideos]);
     }
@@ -811,6 +888,29 @@ export async function collectSources({ roleModelName, weekStart, customSources =
 
   items.push(...newsItems, ...searchItems, ...socialItems, ...videoItems);
 
+  if (items.length < 3 || successfulSearches === 0) {
+    try {
+      items.push(...(await collectNewsFeed({ roleModelName, since: reportingStart })).filter((item) => isRelevantDigestSource(item, roleModelName, officialProfiles)));
+      successfulSearches++;
+    } catch (error) {
+      console.warn(`Independent news feed failed: ${error.message}`);
+    }
+  }
+
+  // Preserve partial search results; recover when Serper is unavailable or sparse.
+  if (items.length < 3) {
+    try {
+      items.push(...await collectWebSources({ roleModelName, since: reportingStart }));
+      successfulSearches++;
+    } catch (error) {
+      console.error(`Independent source search failed: ${error.message}`);
+    }
+  }
+  if (successfulSearches === 0) {
+    throw new Error("Source discovery unavailable; refusing to publish or email an empty digest");
+  }
+  console.log(`[sourceDiscovery] ${roleModelName}: ${items.length} candidates, ${successfulSearches} successful searches`);
+
   for (const source of customSources) {
     const snippet = await fetchCustomSource(source.url);
     items.push({
@@ -822,7 +922,9 @@ export async function collectSources({ roleModelName, weekStart, customSources =
     });
   }
 
-  return dedupeByUrl(items);
+  return dedupeByUrl(
+    items.filter((item) => isRelevantDigestSource(item, roleModelName, officialProfiles))
+  );
 }
 
 
